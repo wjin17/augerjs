@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { Project } from "ts-morph";
-import { parseTypeScriptFile } from "../src/parsers/typescript";
+import { parseTypeScriptFile } from "./typescript";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
@@ -11,7 +11,7 @@ describe("typescript parser", () => {
   it("extracts functions, classes, methods, interfaces, types", () => {
     const project = new Project({ useInMemoryFileSystem: false });
     const result = parseTypeScriptFile(
-      resolve(__dirname, "../../../fixtures/typescript/sample.ts"),
+      resolve(__dirname, "../../../../fixtures/typescript/sample.ts"),
       project
     );
 
