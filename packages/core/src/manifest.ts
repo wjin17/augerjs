@@ -21,8 +21,8 @@ const ManifestSchema = z.object({
   watch: z.object({ debounce: z.number().default(300) }).optional(),
   mcp: z
     .object({
-      transport: z.enum(["stdio"]).default("stdio"),
-      port: z.number().optional(),
+      transport: z.enum(["stdio", "http"]).default("stdio"),
+      port: z.number().default(7827),
     })
     .optional(),
 });

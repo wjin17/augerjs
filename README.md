@@ -1,5 +1,10 @@
 # Auger
 
+[![CI](https://github.com/wjin17/augerjs/actions/workflows/ci.yml/badge.svg)](https://github.com/wjin17/augerjs/actions/workflows/ci.yml)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![TypeScript](https://img.shields.io/badge/TypeScript-5.5-blue.svg)](https://www.typescriptlang.org/)
+[![MCP](https://img.shields.io/badge/MCP-1.29-green.svg)](https://modelcontextprotocol.io/)
+
 A TypeScript-native, manifest-driven codebase indexer and MCP server for LLMs. Runs locally as a daemon, watches your repo for file changes, and answers symbol/caller/trace queries in milliseconds.
 
 ## How it works
@@ -27,16 +32,18 @@ npm link packages/cli
 ## Getting started
 
 ```bash
-# 1. Create a .auger.yml in your project
+# 1. Create .auger.yml and .mcp.json in your project
 cd /your/project
 auger init
 
-# 2. Edit .auger.yml to match your project layout, then start the daemon
-auger start
+# 2. Start the file watcher as a background daemon
+auger watch &
 
-# 3. Check the index in another terminal
+# 3. Check the index
 auger status
 ```
+
+The watcher keeps the index current while you work. Claude Code spawns its own lightweight MCP server per-session via the generated `.mcp.json` — no separate server process needed.
 
 ## `.auger.yml` reference
 
@@ -62,18 +69,22 @@ exclude:
 
 watch:
   debounce: 300          # ms to wait after a write before re-indexing
-
-mcp:
-  transport: stdio       # only supported transport in 0.1
 ```
 
 ## CLI commands
 
 | Command | Description |
 |---|---|
-| `auger init` | Create a default `.auger.yml` in the current directory |
-| `auger start` | Start the file watcher and MCP stdio server |
+| `auger init` | Create `.auger.yml` and `.mcp.json` in the current directory |
+| `auger watch` | Run the file watcher daemon (keep in background) |
+| `auger start` | Start the MCP stdio server (spawned automatically by Claude Code) |
 | `auger status` | Show indexed file and symbol counts |
+| `auger find_symbol <name>` | Locate where a symbol is defined |
+| `auger get_symbol <name>` | Full record: signature, docstring, callers, callees |
+| `auger trace_callers <name>` | Recursive upstream call graph |
+| `auger trace_callees <name>` | Recursive downstream call graph |
+| `auger search <query>` | FTS over symbol names, signatures, and docstrings |
+| `auger get_file_symbols <path>` | All symbols defined in a file |
 
 ## MCP tools
 
@@ -90,21 +101,22 @@ All results include a `location` field in `file:line` format.
 
 ## Wiring into Claude Code
 
-Add a `.mcp.json` to your project root:
+`auger init` generates a `.mcp.json` automatically:
 
 ```json
 {
   "mcpServers": {
     "auger": {
-      "command": "node",
-      "args": ["/path/to/auger/packages/cli/dist/index.js", "start"],
-      "cwd": "/your/project"
+      "command": "npx",
+      "args": ["auger", "start"]
     }
   }
 }
 ```
 
-To pre-approve the server (skip the prompt on each session start), add to `~/.claude/settings.json`:
+Commit this alongside `.auger.yml`. Claude Code spawns `auger start` per session — it connects to the already-running index built by `auger watch`.
+
+To pre-approve the server (skip the trust prompt), add to `~/.claude/settings.json`:
 
 ```json
 {
@@ -114,15 +126,14 @@ To pre-approve the server (skip the prompt on each session start), add to `~/.cl
 
 ## Wiring into Claude Desktop
 
-Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
+Add to `~/Library/Application Support/Claude/claude_desktop_config.json` (macOS):
 
 ```json
 {
   "mcpServers": {
     "auger": {
-      "command": "node",
-      "args": ["/path/to/auger/packages/cli/dist/index.js", "start"],
-      "cwd": "/your/project"
+      "command": "npx",
+      "args": ["auger", "start"]
     }
   }
 }
@@ -133,7 +144,7 @@ Add to your Claude Desktop MCP config (`~/Library/Application Support/Claude/cla
 ```bash
 bun install          # install dependencies
 bun run build        # compile all packages
-bun test             # run the test suite
+bun run test         # run the test suite
 bun run typecheck    # type-check without emitting
 ```
 
@@ -142,4 +153,3 @@ bun run typecheck    # type-check without emitting
 - **Arrow functions and anonymous functions are not indexed.** Only named top-level functions, classes, methods, interfaces, and type aliases are extracted.
 - **Cross-file callee resolution is naive.** Call edges are resolved by matching callee names across all indexed symbols. Two unrelated symbols sharing a name will produce false positives. A proper resolver is planned for 0.2.
 - **Rails-aware extraction is not implemented.** The `rails: true` manifest option is accepted but has no effect. Route parsing, association extraction, and controller action tagging are planned for 0.2.
-- **stdio is the only MCP transport.** HTTP transport is planned for 0.2.

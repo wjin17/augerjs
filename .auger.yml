@@ -11,5 +11,3 @@ exclude:
   - "dist/**"
 watch:
   debounce: 300
-mcp:
-  transport: stdio

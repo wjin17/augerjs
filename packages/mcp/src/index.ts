@@ -1,5 +1,7 @@
+import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type Database from "better-sqlite3";
 
@@ -183,4 +185,52 @@ export async function runMcpStdio(db: Database.Database) {
   const server = createMcpServer(db);
   const transport = new StdioServerTransport();
   await server.connect(transport);
+}
+
+async function readJsonBody(req: IncomingMessage): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    let data = "";
+    req.on("data", (chunk) => (data += chunk));
+    req.on("end", () => {
+      try {
+        resolve(data ? JSON.parse(data) : undefined);
+      } catch {
+        reject(new Error("Invalid JSON body"));
+      }
+    });
+    req.on("error", reject);
+  });
+}
+
+export async function runMcpHttp(db: Database.Database, port: number): Promise<void> {
+  const server = createMcpServer(db);
+  const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+  await server.connect(transport);
+
+  const httpServer = createServer(async (req: IncomingMessage, res: ServerResponse) => {
+    if (req.url !== "/mcp") {
+      res.writeHead(404).end();
+      return;
+    }
+    try {
+      const body = req.method === "POST" ? await readJsonBody(req) : undefined;
+      await transport.handleRequest(req, res, body);
+    } catch (err) {
+      if (!res.headersSent) res.writeHead(500).end(String(err));
+    }
+  });
+
+  await new Promise<void>((resolve) => httpServer.listen(port, resolve));
+  console.log(`Auger MCP server listening on http://localhost:${port}/mcp`);
+
+  process.on("SIGINT", () => {
+    httpServer.close();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    httpServer.close();
+    process.exit(0);
+  });
+
+  await new Promise<void>(() => {});
 }

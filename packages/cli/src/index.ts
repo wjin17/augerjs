@@ -10,9 +10,25 @@ import type Database from "better-sqlite3";
 const program = new Command();
 program.name("auger").description("Live codebase index for LLMs").version("0.1.0");
 
+function loadManifestOrExit() {
+  const manifestPath = resolve(".auger.yml");
+  if (!existsSync(manifestPath)) {
+    console.error("No .auger.yml found. Run `auger init` first.");
+    process.exit(1);
+  }
+  return loadManifest(manifestPath);
+}
+
+function openDbForProject(projectName: string): { db: Database.Database; dbPath: string } {
+  const outDir = join(homedir(), ".auger", projectName);
+  mkdirSync(outDir, { recursive: true });
+  const dbPath = join(outDir, "index.db");
+  return { db: openDb(dbPath), dbPath };
+}
+
 program
   .command("init")
-  .description("Create a default .auger.yml")
+  .description("Create a default .auger.yml and .mcp.json")
   .action(() => {
     if (existsSync(".auger.yml")) {
       console.error(".auger.yml already exists");
@@ -36,28 +52,56 @@ exclude:
   - "dist/**"
 watch:
   debounce: 300
-mcp:
-  transport: stdio
 `
     );
     console.log("Created .auger.yml");
+
+    if (!existsSync(".mcp.json")) {
+      writeFileSync(
+        ".mcp.json",
+        JSON.stringify(
+          { mcpServers: { auger: { command: "npx", args: ["auger", "start"] } } },
+          null,
+          2
+        ) + "\n"
+      );
+      console.log("Created .mcp.json");
+    } else {
+      console.log(".mcp.json already exists — skipped");
+    }
+  });
+
+program
+  .command("watch")
+  .description("Run the file watcher daemon (keeps the index current in the background)")
+  .action(() => {
+    const manifest = loadManifestOrExit();
+    const { db } = openDbForProject(manifest.project.name);
+    const indexer = new Indexer(db);
+    console.log(`Watching ${manifest.project.name}…`);
+    startWatcher(manifest, process.cwd(), db, indexer);
+    // keep process alive
+    process.on("SIGINT", () => process.exit(0));
+    process.on("SIGTERM", () => process.exit(0));
   });
 
 program
   .command("start")
-  .description("Start the watcher and MCP server")
+  .description("Start the MCP stdio server (spawned per-session by Claude Code)")
   .action(async () => {
-    const manifestPath = resolve(".auger.yml");
-    if (!existsSync(manifestPath)) {
-      console.error("No .auger.yml found. Run `auger init` first.");
-      process.exit(1);
-    }
-    const manifest = loadManifest(manifestPath);
-    const outDir = join(homedir(), ".auger", manifest.project.name);
-    mkdirSync(outDir, { recursive: true });
-    const db = openDb(join(outDir, "index.db"));
+    const manifest = loadManifestOrExit();
+    const { db, dbPath } = openDbForProject(manifest.project.name);
     const indexer = new Indexer(db);
-    startWatcher(manifest, process.cwd(), db, indexer);
+
+    // One-time index if the DB is empty (no watcher running yet)
+    const fileCount = (db.prepare("SELECT COUNT(*) as c FROM files").get() as { c: number }).c;
+    if (fileCount === 0) {
+      process.stderr.write(`auger: no index found at ${dbPath}, building now…\n`);
+      startWatcher(manifest, process.cwd(), db, indexer);
+      // Give the initial scan a moment to populate before serving
+      await new Promise((r) => setTimeout(r, 2000));
+    }
+
     await runMcpStdio(db);
   });
 
@@ -65,37 +109,27 @@ program
   .command("status")
   .description("Show index status")
   .action(() => {
-    const manifestPath = resolve(".auger.yml");
-    if (!existsSync(manifestPath)) {
-      console.error("No .auger.yml found");
-      process.exit(1);
-    }
-    const manifest = loadManifest(manifestPath);
+    const manifest = loadManifestOrExit();
     const dbPath = join(homedir(), ".auger", manifest.project.name, "index.db");
     if (!existsSync(dbPath)) {
-      console.log("No index yet. Run `auger start`.");
+      console.log("No index yet. Run `auger watch` or `auger start`.");
       return;
     }
     const db = openDb(dbPath);
     const fileCount = (db.prepare("SELECT COUNT(*) as c FROM files").get() as { c: number }).c;
     const symbolCount = (db.prepare("SELECT COUNT(*) as c FROM symbols").get() as { c: number }).c;
     console.log(`Project: ${manifest.project.name}`);
-    console.log(`Files: ${fileCount}`);
+    console.log(`Files:   ${fileCount}`);
     console.log(`Symbols: ${symbolCount}`);
   });
 
 // --- query commands ---
 
 function openIndex(): Database.Database {
-  const manifestPath = resolve(".auger.yml");
-  if (!existsSync(manifestPath)) {
-    console.error("No .auger.yml found. Run `auger init` first.");
-    process.exit(1);
-  }
-  const manifest = loadManifest(manifestPath);
+  const manifest = loadManifestOrExit();
   const dbPath = join(homedir(), ".auger", manifest.project.name, "index.db");
   if (!existsSync(dbPath)) {
-    console.error("No index yet. Run `auger start` first.");
+    console.error("No index yet. Run `auger watch` first.");
     process.exit(1);
   }
   return openDb(dbPath);
