@@ -5,7 +5,7 @@
   "type": "module",
   "workspaces": ["packages/*"],
   "scripts": {
-    "build": "bun run --filter '*' build",
+    "build": "bun run --filter '@augerjs/core' build && bun run --filter '@augerjs/mcp' build && bun run --filter '@augerjs/cli' build",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "bun run --filter '*' typecheck",

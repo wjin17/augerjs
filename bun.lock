@@ -20,6 +20,9 @@
         "@augerjs/mcp": "workspace:*",
         "commander": "^12.0.0",
       },
+      "devDependencies": {
+        "@types/better-sqlite3": "^7.6.0",
+      },
     },
     "packages/core": {
       "name": "@augerjs/core",
