@@ -15,7 +15,7 @@ export type ExtractedSymbol = {
 
 export type ExtractedFile = {
   path: string;
-  language: "typescript";
+  language: "typescript" | "ruby";
   hash: string;
   symbols: ExtractedSymbol[];
 };

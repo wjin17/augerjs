@@ -32,20 +32,30 @@ export function startWatcher(
     if (!lang) return;
 
     const fullPath = `${rootDir}/${path}`;
-    const content = readFileSync(fullPath, "utf8");
-    const hash = createHash("sha256").update(content).digest("hex");
+    try {
+      const content = readFileSync(fullPath, "utf8");
+      const hash = createHash("sha256").update(content).digest("hex");
 
-    const existing = db
-      .prepare("SELECT hash FROM files WHERE path = ?")
-      .get(fullPath) as { hash: string } | undefined;
+      const existing = db
+        .prepare("SELECT hash FROM files WHERE path = ?")
+        .get(fullPath) as { hash: string } | undefined;
 
-    if (existing?.hash === hash) return;
-    indexer.indexFile(fullPath, lang);
+      if (existing?.hash === hash) return;
+      indexer.indexFile(fullPath, lang);
+    } catch (err) {
+      console.error(`[auger] failed to index ${fullPath}:`, err);
+    }
   };
 
   watcher.on("add", handle);
   watcher.on("change", handle);
-  watcher.on("unlink", (path) => indexer.removeFile(`${rootDir}/${path}`));
+  watcher.on("unlink", (path) => {
+    try {
+      indexer.removeFile(`${rootDir}/${path}`);
+    } catch (err) {
+      console.error(`[auger] failed to remove ${path}:`, err);
+    }
+  });
 
   return watcher;
 }

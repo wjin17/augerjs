@@ -9,10 +9,16 @@ export class Indexer {
   constructor(private db: Database.Database) {}
 
   indexFile(filePath: string, language: "typescript" | "ruby") {
-    const extracted =
-      language === "typescript"
-        ? parseTypeScriptFile(filePath, this.project)
-        : parseRubyFile(filePath);
+    let extracted;
+    try {
+      extracted =
+        language === "typescript"
+          ? parseTypeScriptFile(filePath, this.project)
+          : parseRubyFile(filePath);
+    } catch (err) {
+      console.error(`[auger] parse error in ${filePath}:`, err);
+      return;
+    }
 
     const tx = this.db.transaction(() => {
       this.db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
