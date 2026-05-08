@@ -20,7 +20,11 @@ Default to using Bun instead of Node.js.
 
 ## Testing
 
-Use `bun test` to run tests.
+**This project uses `bun run test` (vitest via Node.js), not `bun test`.** `better-sqlite3` is a Node native module locked by the spec — it cannot load under Bun's runtime. Always run:
+
+```sh
+bun run test
+```
 
 ```ts#index.test.ts
 import { test, expect } from "bun:test";

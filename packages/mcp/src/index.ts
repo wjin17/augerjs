@@ -89,7 +89,7 @@ function withLocation<T extends WithLocation>(row: T): T & { location: string } 
   return { ...row, location: `${row.file_path}:${row.start_line}` };
 }
 
-function handleTool(db: Database.Database, name: string, args: Record<string, unknown>): unknown {
+export function handleTool(db: Database.Database, name: string, args: Record<string, unknown>): unknown {
   switch (name) {
     case "find_symbol": {
       const rows = db
