@@ -1,0 +1,15 @@
+{
+  "name": "@augerjs/mcp",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "exports": { ".": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@augerjs/core": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.0.0"
+  }
+}

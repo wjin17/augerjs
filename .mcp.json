@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "auger": {
+      "command": "node",
+      "args": ["/home/dobby/projects/auger/packages/cli/dist/index.js", "start"],
+      "cwd": "/home/dobby/projects/auger"
+    }
+  }
+}

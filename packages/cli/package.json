@@ -1,0 +1,15 @@
+{
+  "name": "@augerjs/cli",
+  "version": "0.0.0",
+  "type": "module",
+  "bin": { "auger": "./dist/index.js" },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@augerjs/core": "workspace:*",
+    "@augerjs/mcp": "workspace:*",
+    "commander": "^12.0.0"
+  }
+}

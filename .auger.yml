@@ -1,0 +1,15 @@
+version: 1
+project:
+  name: auger
+languages:
+  - name: typescript
+  - name: ruby
+include:
+  - "packages/*/src/**/*"
+exclude:
+  - "node_modules/**"
+  - "dist/**"
+watch:
+  debounce: 300
+mcp:
+  transport: stdio

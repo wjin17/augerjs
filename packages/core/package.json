@@ -1,0 +1,25 @@
+{
+  "name": "@augerjs/core",
+  "version": "0.0.0",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": { ".": "./dist/index.js" },
+  "scripts": {
+    "prebuild": "mkdir -p dist/db && cp src/db/schema.sql dist/db/",
+    "build": "tsc",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "better-sqlite3": "^11.0.0",
+    "chokidar": "^3.6.0",
+    "ts-morph": "^23.0.0",
+    "tree-sitter": "^0.21.0",
+    "tree-sitter-ruby": "^0.21.0",
+    "yaml": "^2.5.0",
+    "zod": "^3.0.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.0"
+  }
+}

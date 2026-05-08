@@ -1,0 +1,22 @@
+{
+  "name": "@augerjs/monorepo",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "workspaces": ["packages/*"],
+  "scripts": {
+    "build": "bun run --filter '*' build",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "typecheck": "bun run --filter '*' typecheck",
+    "lint": "bun run --filter '*' lint"
+  },
+  "devDependencies": {
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0",
+    "@types/node": "^20.0.0"
+  },
+  "trustedDependencies": [
+    "tree-sitter-ruby"
+  ]
+}
