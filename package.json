@@ -17,6 +17,7 @@
     "@types/node": "^20.0.0"
   },
   "trustedDependencies": [
+    "better-sqlite3",
     "tree-sitter-ruby"
   ]
 }
