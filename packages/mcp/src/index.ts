@@ -100,21 +100,24 @@ export function handleTool(db: Database.Database, name: string, args: Record<str
       return { matches: rows.map(withLocation) };
     }
     case "get_symbol": {
-      const sym = db
-        .prepare("SELECT * FROM symbols WHERE name = ? LIMIT 1")
-        .get(args["name"]) as (WithLocation & { id: number }) | undefined;
-      if (!sym) return { found: false };
-      const callers = (db
-        .prepare(
-          "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.caller_id WHERE e.callee_id = ?"
-        )
-        .all(sym.id) as WithLocation[]).map(withLocation);
-      const callees = (db
-        .prepare(
-          "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.callee_id WHERE e.caller_id = ?"
-        )
-        .all(sym.id) as WithLocation[]).map(withLocation);
-      return { ...withLocation(sym), callers, callees };
+      const syms = db
+        .prepare("SELECT * FROM symbols WHERE name = ?")
+        .all(args["name"]) as (WithLocation & { id: number })[];
+      if (syms.length === 0) return { found: false };
+      const results = syms.map((sym) => {
+        const callers = (db
+          .prepare(
+            "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.caller_id WHERE e.callee_id = ?"
+          )
+          .all(sym.id) as WithLocation[]).map(withLocation);
+        const callees = (db
+          .prepare(
+            "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.callee_id WHERE e.caller_id = ?"
+          )
+          .all(sym.id) as WithLocation[]).map(withLocation);
+        return { ...withLocation(sym), callers, callees };
+      });
+      return results.length === 1 ? results[0] : { matches: results };
     }
     case "trace_callers": {
       const maxDepth = (args["max_depth"] as number) ?? 5;

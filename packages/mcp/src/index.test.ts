@@ -69,6 +69,26 @@ describe("MCP tools", () => {
       const result = handleTool(db, "get_symbol", { name: "doesNotExist" }) as any;
       expect(result.found).toBe(false);
     });
+
+    it("returns flat record for a unique name", () => {
+      const result = handleTool(db, "get_symbol", { name: "add" }) as any;
+      expect(result.name).toBe("add");
+      expect(result.matches).toBeUndefined();
+    });
+
+    it("returns matches array when multiple files define the same name", () => {
+      // Seed a second file with a duplicate symbol name
+      db.prepare(
+        "INSERT INTO files (path, language, hash, indexed_at) VALUES (?, 'typescript', 'abc', datetime('now'))"
+      ).run("/other/file.ts");
+      db.prepare(
+        "INSERT INTO symbols (name, kind, file_path, start_line, end_line, signature) VALUES (?, 'function', '/other/file.ts', 1, 5, 'function add(...)')"
+      ).run("add");
+      const result = handleTool(db, "get_symbol", { name: "add" }) as any;
+      expect(Array.isArray(result.matches)).toBe(true);
+      expect(result.matches).toHaveLength(2);
+      expect(result.matches.every((m: any) => m.name === "add")).toBe(true);
+    });
   });
 
   describe("trace_callers", () => {
