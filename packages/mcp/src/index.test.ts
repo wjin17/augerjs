@@ -132,7 +132,9 @@ describe("MCP tools", () => {
         path: `${fixtures}/typescript/sample.ts`,
       }) as any;
       const names = result.symbols.map((s: any) => s.name).sort();
-      expect(names).toEqual(["Greeter", "User", "UserId", "add", "formatName", "greet"]);
+      expect(names).toEqual([
+        "Greeter", "User", "UserId", "add", "double", "formatName", "greet", "greetAsync", "identity",
+      ]);
     });
 
     it("includes location on each symbol", () => {

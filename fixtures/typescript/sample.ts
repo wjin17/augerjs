@@ -21,3 +21,12 @@ export interface User {
 }
 
 export type UserId = User["id"];
+
+/** Doubles a number. */
+export const double = (n: number): number => n * 2;
+
+/** Async greeter. */
+export const greetAsync = async (name: string): Promise<string> =>
+  `Hello, ${formatName(name)}`;
+
+export const identity = <T>(x: T): T => x;

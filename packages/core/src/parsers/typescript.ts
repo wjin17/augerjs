@@ -93,8 +93,46 @@ export function parseTypeScriptFile(filePath: string, project: Project): Extract
     });
   }
 
+  for (const varStmt of sf.getVariableStatements()) {
+    for (const decl of varStmt.getDeclarations()) {
+      // Only simple identifier names (skip destructuring)
+      if (decl.getNameNode().getKind() !== SyntaxKind.Identifier) continue;
+      const init = decl.getInitializer();
+      if (!init) continue;
+      const initKind = init.getKind();
+      if (initKind !== SyntaxKind.ArrowFunction && initKind !== SyntaxKind.FunctionExpression) continue;
+
+      const fn = init as unknown as {
+        isAsync(): boolean;
+        getParameters(): Array<{ getText(): string }>;
+        getReturnTypeNode(): { getText(): string } | undefined;
+      };
+
+      symbols.push({
+        name: decl.getName(),
+        kind: "function",
+        signature: buildArrowSignature(decl.getName(), fn),
+        docstring: getJsDoc(varStmt),
+        startLine: varStmt.getStartLineNumber(),
+        endLine: varStmt.getEndLineNumber(),
+        parentName: null,
+        callees: extractCallees(init),
+      });
+    }
+  }
+
   project.removeSourceFile(sf);
   return { path: filePath, language: "typescript", hash, symbols };
+}
+
+function buildArrowSignature(
+  name: string,
+  fn: { isAsync(): boolean; getParameters(): Array<{ getText(): string }>; getReturnTypeNode(): { getText(): string } | undefined }
+): string {
+  const asyncPrefix = fn.isAsync() ? "async " : "";
+  const params = fn.getParameters().map((p) => p.getText()).join(", ");
+  const ret = fn.getReturnTypeNode()?.getText();
+  return `const ${name} = ${asyncPrefix}(${params})${ret ? `: ${ret}` : ""}`;
 }
 
 function getJsDoc(node: { getJsDocs?: () => Array<{ getDescription: () => string }> }): string | null {

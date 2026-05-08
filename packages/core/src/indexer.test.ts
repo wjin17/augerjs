@@ -30,7 +30,9 @@ describe("Indexer", () => {
       const names = (db.prepare("SELECT name FROM symbols").all() as { name: string }[])
         .map((r) => r.name)
         .sort();
-      expect(names).toEqual(["Greeter", "User", "UserId", "add", "formatName", "greet"]);
+      expect(names).toEqual([
+        "Greeter", "User", "UserId", "add", "double", "formatName", "greet", "greetAsync", "identity",
+      ]);
     });
 
     it("stores the file record with correct language", () => {
@@ -91,7 +93,7 @@ describe("Indexer", () => {
       indexer.indexFile(tsFixture, "typescript");
       indexer.indexFile(tsFixture, "typescript");
       const count = (db.prepare("SELECT COUNT(*) as c FROM symbols").get() as { c: number }).c;
-      expect(count).toBe(6);
+      expect(count).toBe(9);
     });
   });
 
