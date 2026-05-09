@@ -86,15 +86,18 @@ program
     const rootDir = findProjectRoot(process.cwd());
     const registry = new ProjectRegistry(rootDir);
 
-    // Pre-warm the startup project: index if needed, wait for initial scan.
-    process.stderr.write(`auger: indexing ${rootDir}…\n`);
-    await registry.getDb();
-    process.stderr.write(`auger: ready\n`);
-
-    await runMcpStdio((root?) => registry.getDb(root));
+    // Kick off indexing immediately but don't block — connect the MCP
+    // transport right away so Claude Code doesn't time out waiting for
+    // the initialize handshake. Tool calls naturally await registry.getDb()
+    // which queues them until the initial scan is done.
+    registry.getDb().then(() => {
+      process.stderr.write(`auger: ready (${rootDir})\n`);
+    });
 
     process.on("SIGINT", () => { registry.close(); process.exit(0); });
     process.on("SIGTERM", () => { registry.close(); process.exit(0); });
+
+    await runMcpStdio((root?) => registry.getDb(root));
   });
 
 // ── status ──────────────────────────────────────────────────────────────────
