@@ -127,7 +127,9 @@ describe("find symbol by name — 1 file", () => {
   afterAll(() => db.close());
 
   bench(`auger — ${N_AUGER}× WHERE name = 'add'`, () => {
-    for (let i = 0; i < N_AUGER; i++) findStmt.all("add");
+    let n = 0;
+    for (let i = 0; i < N_AUGER; i++) n += (findStmt.all("add") as unknown[]).length;
+    return n;
   }, { time: BENCH_TIME });
 
   bench("grep — 1× regex scan (fork+exec+read+match)", () => {
@@ -155,7 +157,9 @@ describe("full-text search — 1 file", () => {
   afterAll(() => db.close());
 
   bench(`auger — ${N_AUGER}× FTS5 MATCH (porter-stemmed, name+sig+doc)`, () => {
-    for (let i = 0; i < N_AUGER; i++) ftsStmt.all("format*");
+    let n = 0;
+    for (let i = 0; i < N_AUGER; i++) n += (ftsStmt.all("format*") as unknown[]).length;
+    return n;
   }, { time: BENCH_TIME });
 
   bench("grep — 1× raw line scan", () => {
@@ -179,7 +183,9 @@ describe("list file symbols — 1 file", () => {
   afterAll(() => db.close());
 
   bench(`auger — ${N_AUGER}× WHERE file_path = ?`, () => {
-    for (let i = 0; i < N_AUGER; i++) listStmt.all(tsFixture);
+    let n = 0;
+    for (let i = 0; i < N_AUGER; i++) n += (listStmt.all(tsFixture) as unknown[]).length;
+    return n;
   }, { time: BENCH_TIME });
 
   bench("grep+awk — 1× multi-pattern heuristic (misses class fields, obj methods)", () => {
@@ -221,7 +227,9 @@ describe(`find symbol by name — ${CORPUS_SIZE} files`, () => {
   });
 
   bench(`auger — ${N_AUGER}× indexed lookup (O(1) regardless of file count)`, () => {
-    for (let i = 0; i < N_AUGER; i++) findStmt.all("add");
+    let n = 0;
+    for (let i = 0; i < N_AUGER; i++) n += (findStmt.all("add") as unknown[]).length;
+    return n;
   }, { time: BENCH_TIME });
 
   bench("grep -r — 1× linear scan across all files (O(n) in file count)", () => {
@@ -257,7 +265,9 @@ describe("trace callers of 'formatName'", () => {
   afterAll(() => db.close());
 
   bench(`auger — ${N_AUGER}× recursive CTE through call_edges (exact, no false positives)`, () => {
-    for (let i = 0; i < N_AUGER; i++) traceStmt.all("formatName");
+    let n = 0;
+    for (let i = 0; i < N_AUGER; i++) n += (traceStmt.all("formatName") as unknown[]).length;
+    return n;
   }, { time: BENCH_TIME });
 
   bench("grep — 1× text search for call sites (shallow, no graph, false positives)", () => {

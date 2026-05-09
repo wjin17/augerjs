@@ -6,7 +6,8 @@
   "workspaces": ["packages/*"],
   "scripts": {
     "build": "bun run --filter '@augerjs/core' build && bun run --filter '@augerjs/mcp' build && bun run --filter '@augerjs/cli' build",
-    "bench": "vitest bench",
+    "bench": "vitest bench --run",
+    "bench:compare": "vitest run --reporter verbose packages/core/src/bench-compare.test.ts",
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "bun run --filter '*' typecheck",
