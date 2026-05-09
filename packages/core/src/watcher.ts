@@ -1,4 +1,4 @@
-import chokidar from "chokidar";
+import chokidar, { type FSWatcher } from "chokidar";
 import { extname } from "node:path";
 import { Indexer } from "./indexer.js";
 import type { Manifest } from "./manifest.js";
@@ -11,7 +11,7 @@ export function startWatcher(
   rootDir: string,
   db: Database.Database,
   indexer: Indexer
-) {
+): { watcher: FSWatcher; ready: Promise<void> } {
   const watcher = chokidar.watch(manifest.include, {
     cwd: rootDir,
     ignored: manifest.exclude,
@@ -57,5 +57,6 @@ export function startWatcher(
     }
   });
 
-  return watcher;
+  const ready = new Promise<void>((resolve) => watcher.once("ready", resolve));
+  return { watcher, ready };
 }

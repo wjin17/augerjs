@@ -1,11 +1,26 @@
 import { createServer, type IncomingMessage, type ServerResponse } from "node:http";
+import { dirname } from "node:path";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { CallToolRequestSchema, ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 import type Database from "better-sqlite3";
 
-export function createMcpServer(db: Database.Database) {
+// Resolves the correct project DB for a tool call.
+// For file-based tools the DB is derived from the file path; for name-based
+// tools the caller may pass an explicit `root` (any path inside the project).
+export type GetDb = (root?: string) => Promise<Database.Database>;
+
+const ROOT_PROP = {
+  root: {
+    type: "string",
+    description:
+      "Optional path to any file or directory inside the target project. " +
+      "Omit to use the current project (the directory Claude Code was opened in).",
+  },
+} as const;
+
+export function createMcpServer(getDb: GetDb) {
   const server = new Server(
     { name: "auger", version: "0.1.0" },
     { capabilities: { tools: {} } }
@@ -19,7 +34,7 @@ export function createMcpServer(db: Database.Database) {
           "Locate where a symbol is defined. Returns file path, line number, and symbol type. Use this when you know a name and need to find it.",
         inputSchema: {
           type: "object",
-          properties: { name: { type: "string" } },
+          properties: { name: { type: "string" }, ...ROOT_PROP },
           required: ["name"],
         },
       },
@@ -29,7 +44,7 @@ export function createMcpServer(db: Database.Database) {
           "Get the full record for a named symbol: signature, docstring, callers, and callees. Use this instead of find_symbol when you need to understand a symbol, not just locate it.",
         inputSchema: {
           type: "object",
-          properties: { name: { type: "string" } },
+          properties: { name: { type: "string" }, ...ROOT_PROP },
           required: ["name"],
         },
       },
@@ -39,7 +54,7 @@ export function createMcpServer(db: Database.Database) {
           "Recursively walk upstream from a symbol — everything that calls it, and everything that calls those callers. Use this to understand the blast radius of a change.",
         inputSchema: {
           type: "object",
-          properties: { name: { type: "string" }, max_depth: { type: "number" } },
+          properties: { name: { type: "string" }, max_depth: { type: "number" }, ...ROOT_PROP },
           required: ["name"],
         },
       },
@@ -49,7 +64,7 @@ export function createMcpServer(db: Database.Database) {
           "Recursively walk downstream from a symbol — everything it calls, and everything those call. Use this to trace execution flow.",
         inputSchema: {
           type: "object",
-          properties: { name: { type: "string" }, max_depth: { type: "number" } },
+          properties: { name: { type: "string" }, max_depth: { type: "number" }, ...ROOT_PROP },
           required: ["name"],
         },
       },
@@ -59,7 +74,7 @@ export function createMcpServer(db: Database.Database) {
           "Full-text search across symbol names, signatures, and docstrings. Searches the index, not raw file contents.",
         inputSchema: {
           type: "object",
-          properties: { query: { type: "string" } },
+          properties: { query: { type: "string" }, ...ROOT_PROP },
           required: ["query"],
         },
       },
@@ -78,7 +93,20 @@ export function createMcpServer(db: Database.Database) {
 
   server.setRequestHandler(CallToolRequestSchema, async (req) => {
     const { name, arguments: args } = req.params;
-    const result = handleTool(db, name, args ?? {});
+    const a = (args ?? {}) as Record<string, unknown>;
+
+    // Resolve the right project DB for this call.
+    // get_file_symbols derives the project from its `path` argument;
+    // all other tools use the explicit `root` param (or fall back to default).
+    let root: string | undefined;
+    if (name === "get_file_symbols" && typeof a["path"] === "string") {
+      root = dirname(a["path"]);
+    } else if (typeof a["root"] === "string") {
+      root = a["root"];
+    }
+
+    const db = await getDb(root);
+    const result = handleTool(db, name, a);
     return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
   });
 
@@ -184,8 +212,8 @@ function traceGraph(
   return { trace: rows.map(withLocation) };
 }
 
-export async function runMcpStdio(db: Database.Database) {
-  const server = createMcpServer(db);
+export async function runMcpStdio(getDb: GetDb) {
+  const server = createMcpServer(getDb);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
@@ -205,8 +233,8 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function runMcpHttp(db: Database.Database, port: number): Promise<void> {
-  const server = createMcpServer(db);
+export async function runMcpHttp(getDb: GetDb, port: number): Promise<void> {
+  const server = createMcpServer(getDb);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
 
@@ -226,14 +254,8 @@ export async function runMcpHttp(db: Database.Database, port: number): Promise<v
   await new Promise<void>((resolve) => httpServer.listen(port, resolve));
   console.log(`Auger MCP server listening on http://localhost:${port}/mcp`);
 
-  process.on("SIGINT", () => {
-    httpServer.close();
-    process.exit(0);
-  });
-  process.on("SIGTERM", () => {
-    httpServer.close();
-    process.exit(0);
-  });
+  process.on("SIGINT", () => { httpServer.close(); process.exit(0); });
+  process.on("SIGTERM", () => { httpServer.close(); process.exit(0); });
 
   await new Promise<void>(() => {});
 }

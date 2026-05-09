@@ -1,4 +1,5 @@
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { basename, join } from "node:path";
 import { parse } from "yaml";
 import { z } from "zod";
 
@@ -33,4 +34,28 @@ export function loadManifest(path: string): Manifest {
   const raw = readFileSync(path, "utf8");
   const parsed = parse(raw);
   return ManifestSchema.parse(parsed);
+}
+
+export function defaultManifest(rootDir: string): Manifest {
+  return {
+    version: 1,
+    project: { name: basename(rootDir) },
+    languages: [{ name: "typescript" }, { name: "ruby" }],
+    include: ["**/*"],
+    exclude: [
+      "node_modules/**",
+      "dist/**",
+      "out/**",
+      "build/**",
+      ".git/**",
+      "**/*.d.ts",
+      "**/*.min.js",
+    ],
+    watch: { debounce: 300 },
+  };
+}
+
+export function resolveManifest(rootDir: string): Manifest {
+  const manifestPath = join(rootDir, ".auger.yml");
+  return existsSync(manifestPath) ? loadManifest(manifestPath) : defaultManifest(rootDir);
 }

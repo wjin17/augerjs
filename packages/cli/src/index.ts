@@ -1,66 +1,32 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { existsSync, mkdirSync, writeFileSync } from "node:fs";
-import { homedir } from "node:os";
-import { join, resolve } from "node:path";
-import { loadManifest, openDb, Indexer, startWatcher } from "@augerjs/core";
+import { existsSync, writeFileSync } from "node:fs";
+import { resolve } from "node:path";
+import {
+  findProjectRoot,
+  dbPathForRoot,
+  resolveManifest,
+  openDb,
+  Indexer,
+  startWatcher,
+  ProjectRegistry,
+} from "@augerjs/core";
 import { runMcpStdio, handleTool } from "@augerjs/mcp";
-import type Database from "better-sqlite3";
 
 const program = new Command();
 program.name("auger").description("Live codebase index for LLMs").version("0.1.0");
 
-function loadManifestOrExit() {
-  const manifestPath = resolve(".auger.yml");
-  if (!existsSync(manifestPath)) {
-    console.error("No .auger.yml found. Run `auger init` first.");
-    process.exit(1);
-  }
-  return loadManifest(manifestPath);
-}
-
-function openDbForProject(projectName: string): { db: Database.Database; dbPath: string } {
-  const outDir = join(homedir(), ".auger", projectName);
-  mkdirSync(outDir, { recursive: true });
-  const dbPath = join(outDir, "index.db");
-  return { db: openDb(dbPath), dbPath };
-}
+// ── init ────────────────────────────────────────────────────────────────────
 
 program
   .command("init")
-  .description("Create a default .auger.yml and .mcp.json")
+  .description("Create .mcp.json for Claude Code integration")
   .action(() => {
-    if (existsSync(".auger.yml")) {
-      console.error(".auger.yml already exists");
-      process.exit(1);
-    }
-    const projectName = process.cwd().split("/").pop() ?? "my-app";
-    writeFileSync(
-      ".auger.yml",
-      `version: 1
-project:
-  name: ${projectName}
-languages:
-  - name: typescript
-  - name: ruby
-include:
-  - "src/**/*"
-  - "app/**/*"
-  - "lib/**/*"
-exclude:
-  - "node_modules/**"
-  - "dist/**"
-watch:
-  debounce: 300
-`
-    );
-    console.log("Created .auger.yml");
-
     if (!existsSync(".mcp.json")) {
       writeFileSync(
         ".mcp.json",
         JSON.stringify(
-          { mcpServers: { auger: { command: "npx", args: ["auger", "start"] } } },
+          { mcpServers: { auger: { command: "auger", args: ["start"] } } },
           null,
           2
         ) + "\n"
@@ -69,67 +35,82 @@ watch:
     } else {
       console.log(".mcp.json already exists — skipped");
     }
+
+    if (existsSync(".auger.yml")) {
+      console.log(".auger.yml found — custom include/exclude will be used.");
+    } else {
+      console.log(
+        "No .auger.yml — using defaults (all TS/Ruby files, excludes node_modules/dist).\n" +
+        "Create .auger.yml to customise include/exclude patterns."
+      );
+    }
   });
+
+// ── watch ───────────────────────────────────────────────────────────────────
 
 program
   .command("watch")
   .description("Run the file watcher daemon (keeps the index current in the background)")
   .action(() => {
-    const manifest = loadManifestOrExit();
-    const { db } = openDbForProject(manifest.project.name);
+    const rootDir = findProjectRoot(process.cwd());
+    const manifest = resolveManifest(rootDir);
+    const db = openDb(dbPathForRoot(rootDir));
     const indexer = new Indexer(db);
-    console.log(`Watching ${manifest.project.name}…`);
-    startWatcher(manifest, process.cwd(), db, indexer);
-    // keep process alive
+    console.error(`auger: watching ${rootDir}`);
+    startWatcher(manifest, rootDir, db, indexer);
     process.on("SIGINT", () => process.exit(0));
     process.on("SIGTERM", () => process.exit(0));
   });
+
+// ── start ───────────────────────────────────────────────────────────────────
 
 program
   .command("start")
   .description("Start the MCP stdio server (spawned per-session by Claude Code)")
   .action(async () => {
-    const manifest = loadManifestOrExit();
-    const { db, dbPath } = openDbForProject(manifest.project.name);
-    const indexer = new Indexer(db);
+    const rootDir = findProjectRoot(process.cwd());
+    const registry = new ProjectRegistry(rootDir);
 
-    // One-time index if the DB is empty (no watcher running yet)
-    const fileCount = (db.prepare("SELECT COUNT(*) as c FROM files").get() as { c: number }).c;
-    if (fileCount === 0) {
-      process.stderr.write(`auger: no index found at ${dbPath}, building now…\n`);
-      startWatcher(manifest, process.cwd(), db, indexer);
-      // Give the initial scan a moment to populate before serving
-      await new Promise((r) => setTimeout(r, 2000));
-    }
+    // Pre-warm the startup project: index if needed, wait for initial scan.
+    process.stderr.write(`auger: indexing ${rootDir}…\n`);
+    await registry.getDb();
+    process.stderr.write(`auger: ready\n`);
 
-    await runMcpStdio(db);
+    await runMcpStdio((root?) => registry.getDb(root));
+
+    process.on("SIGINT", () => { registry.close(); process.exit(0); });
+    process.on("SIGTERM", () => { registry.close(); process.exit(0); });
   });
+
+// ── status ──────────────────────────────────────────────────────────────────
 
 program
   .command("status")
   .description("Show index status")
   .action(() => {
-    const manifest = loadManifestOrExit();
-    const dbPath = join(homedir(), ".auger", manifest.project.name, "index.db");
+    const rootDir = findProjectRoot(process.cwd());
+    const dbPath = dbPathForRoot(rootDir);
     if (!existsSync(dbPath)) {
-      console.log("No index yet. Run `auger watch` or `auger start`.");
+      console.log(`No index for ${rootDir}.\nRun \`auger start\` or \`auger watch\` first.`);
       return;
     }
     const db = openDb(dbPath);
     const fileCount = (db.prepare("SELECT COUNT(*) as c FROM files").get() as { c: number }).c;
     const symbolCount = (db.prepare("SELECT COUNT(*) as c FROM symbols").get() as { c: number }).c;
-    console.log(`Project: ${manifest.project.name}`);
+    console.log(`Project: ${rootDir}`);
+    console.log(`DB:      ${dbPath}`);
     console.log(`Files:   ${fileCount}`);
     console.log(`Symbols: ${symbolCount}`);
+    db.close();
   });
 
-// --- query commands ---
+// ── query commands ───────────────────────────────────────────────────────────
 
-function openIndex(): Database.Database {
-  const manifest = loadManifestOrExit();
-  const dbPath = join(homedir(), ".auger", manifest.project.name, "index.db");
+function openIndex(): ReturnType<typeof openDb> {
+  const rootDir = findProjectRoot(process.cwd());
+  const dbPath = dbPathForRoot(rootDir);
   if (!existsSync(dbPath)) {
-    console.error("No index yet. Run `auger watch` first.");
+    console.error(`No index for ${rootDir}. Run \`auger start\` first.`);
     process.exit(1);
   }
   return openDb(dbPath);
