@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { existsSync, writeFileSync } from "node:fs";
-import { resolve } from "node:path";
+import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, resolve } from "node:path";
 import {
   findProjectRoot,
   dbPathForRoot,
@@ -18,31 +19,45 @@ program.name("auger").description("Live codebase index for LLMs").version("0.1.0
 
 // ── init ────────────────────────────────────────────────────────────────────
 
+const MCP_ENTRY = { command: "auger", args: ["start"] };
+
+function writeMcpEntry(mcpPath: string) {
+  let config: Record<string, unknown> = { mcpServers: {} };
+  if (existsSync(mcpPath)) {
+    try { config = JSON.parse(readFileSync(mcpPath, "utf8")); } catch {}
+  }
+  const servers = (config.mcpServers ?? {}) as Record<string, unknown>;
+  if (servers["auger"]) {
+    console.log(`auger already present in ${mcpPath} — skipped`);
+    return;
+  }
+  servers["auger"] = MCP_ENTRY;
+  config.mcpServers = servers;
+  writeFileSync(mcpPath, JSON.stringify(config, null, 2) + "\n");
+  console.log(`Updated ${mcpPath}`);
+}
+
 program
   .command("init")
-  .description("Create .mcp.json for Claude Code integration")
-  .action(() => {
-    if (!existsSync(".mcp.json")) {
-      writeFileSync(
-        ".mcp.json",
-        JSON.stringify(
-          { mcpServers: { auger: { command: "auger", args: ["start"] } } },
-          null,
-          2
-        ) + "\n"
-      );
-      console.log("Created .mcp.json");
-    } else {
-      console.log(".mcp.json already exists — skipped");
-    }
-
-    if (existsSync(".auger.yml")) {
-      console.log(".auger.yml found — custom include/exclude will be used.");
-    } else {
+  .description("Wire auger into Claude Code (.mcp.json)")
+  .option("-g, --global", "add to ~/.mcp.json (works for every repo, no per-project setup)")
+  .action((opts) => {
+    if (opts.global) {
+      writeMcpEntry(join(homedir(), ".mcp.json"));
       console.log(
-        "No .auger.yml — using defaults (all TS/Ruby files, excludes node_modules/dist).\n" +
-        "Create .auger.yml to customise include/exclude patterns."
+        "Done. Auger will auto-detect and index any project you open in Claude Code.\n" +
+        "No .auger.yml needed — add one per-project to customise include/exclude."
       );
+    } else {
+      writeMcpEntry(".mcp.json");
+      if (existsSync(".auger.yml")) {
+        console.log(".auger.yml found — custom include/exclude will be used.");
+      } else {
+        console.log(
+          "No .auger.yml — using defaults (all TS/Ruby files, skips node_modules/dist).\n" +
+          "Create .auger.yml to customise include/exclude patterns."
+        );
+      }
     }
   });
 

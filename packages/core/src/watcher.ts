@@ -2,7 +2,7 @@ import chokidar, { type FSWatcher } from "chokidar";
 import { extname } from "node:path";
 import { Indexer } from "./indexer.js";
 import type { Manifest } from "./manifest.js";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync, statSync } from "node:fs";
 import { createHash } from "node:crypto";
 import type Database from "better-sqlite3";
 
@@ -33,14 +33,19 @@ export function startWatcher(
 
     const fullPath = `${rootDir}/${path}`;
     try {
-      const content = readFileSync(fullPath, "utf8");
-      const hash = createHash("sha256").update(content).digest("hex");
+      const mtime = statSync(fullPath).mtimeMs;
 
       const existing = db
-        .prepare("SELECT hash FROM files WHERE path = ?")
-        .get(fullPath) as { hash: string } | undefined;
+        .prepare("SELECT hash, indexed_at FROM files WHERE path = ?")
+        .get(fullPath) as { hash: string; indexed_at: number } | undefined;
 
+      // Fast path: file mtime predates last index — content cannot have changed.
+      if (existing && mtime < existing.indexed_at) return;
+
+      const content = readFileSync(fullPath, "utf8");
+      const hash = createHash("sha256").update(content).digest("hex");
       if (existing?.hash === hash) return;
+
       indexer.indexFile(fullPath, lang);
     } catch (err) {
       console.error(`[auger] failed to index ${fullPath}:`, err);
@@ -57,6 +62,18 @@ export function startWatcher(
     }
   });
 
-  const ready = new Promise<void>((resolve) => watcher.once("ready", resolve));
+  const ready = new Promise<void>((resolve) => {
+    watcher.once("ready", () => {
+      // Remove DB entries for files deleted while the watcher was offline.
+      const tracked = db.prepare("SELECT path FROM files").all() as { path: string }[];
+      for (const { path } of tracked) {
+        if (!existsSync(path)) {
+          try { indexer.removeFile(path); } catch {}
+        }
+      }
+      resolve();
+    });
+  });
+
   return { watcher, ready };
 }
