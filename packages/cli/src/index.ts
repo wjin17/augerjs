@@ -75,13 +75,15 @@ program
     // Tool calls naturally await registry.getDb() until the scan completes.
     registry.getDb().then(() => {
       process.stderr.write(`auger: ready (${rootDir})\n`);
+    }).catch((err) => {
+      process.stderr.write(`auger: failed to index ${rootDir}: ${err}\n`);
     });
 
-    process.on("SIGINT", () => {
+    process.once("SIGINT", () => {
       registry.close();
       process.exit(0);
     });
-    process.on("SIGTERM", () => {
+    process.once("SIGTERM", () => {
       registry.close();
       process.exit(0);
     });
