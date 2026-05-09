@@ -307,11 +307,11 @@ export async function runMcpHttp(getDb: GetDb, port: number): Promise<void> {
   await new Promise<void>((resolve) => httpServer.listen(port, resolve));
   console.log(`Auger MCP server listening on http://localhost:${port}/mcp`);
 
-  process.on("SIGINT", () => {
+  process.once("SIGINT", () => {
     httpServer.close();
     process.exit(0);
   });
-  process.on("SIGTERM", () => {
+  process.once("SIGTERM", () => {
     httpServer.close();
     process.exit(0);
   });
