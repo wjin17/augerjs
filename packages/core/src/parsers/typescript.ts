@@ -1,6 +1,13 @@
 import { Project, SyntaxKind, type Node } from "ts-morph";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, resolve } from "node:path";
+
+export type ImportEntry = {
+  localName: string;
+  exportedName: string;
+  sourcePath: string;
+};
 
 export type ExtractedSymbol = {
   name: string;
@@ -19,6 +26,7 @@ export type ExtractedFile = {
   language: "typescript" | "ruby";
   hash: string;
   symbols: ExtractedSymbol[];
+  imports: ImportEntry[];
 };
 
 type FnInterface = {
@@ -229,8 +237,35 @@ export function parseTypeScriptFile(filePath: string, project: Project): Extract
     });
   }
 
+  const imports: ImportEntry[] = [];
+  for (const decl of sf.getImportDeclarations()) {
+    const sourcePath = resolveImportPath(filePath, decl.getModuleSpecifierValue());
+    if (!sourcePath) continue;
+    for (const spec of decl.getNamedImports()) {
+      const node = spec.compilerNode as any;
+      const localName = node.name.text as string;
+      const exportedName = (node.propertyName?.text ?? localName) as string;
+      imports.push({ localName, exportedName, sourcePath });
+    }
+  }
+
   project.removeSourceFile(sf);
-  return { path: filePath, language: "typescript", hash, symbols };
+  return { path: filePath, language: "typescript", hash, symbols, imports };
+}
+
+function resolveImportPath(from: string, specifier: string): string | null {
+  if (!specifier.startsWith(".")) return null;
+  const base = resolve(dirname(from), specifier);
+  const candidates = [
+    base,
+    base.replace(/\.js$/, ".ts"),
+    base.replace(/\.js$/, ".tsx"),
+    base + ".ts",
+    base + ".tsx",
+    resolve(base, "index.ts"),
+    resolve(base, "index.tsx"),
+  ];
+  return candidates.find(existsSync) ?? null;
 }
 
 function buildArrowSignature(name: string, fn: FnInterface): string {

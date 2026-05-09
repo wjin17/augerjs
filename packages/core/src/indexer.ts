@@ -37,6 +37,13 @@ export class Indexer {
         "INSERT OR IGNORE INTO call_edges (caller_id, callee_name) VALUES (?, ?)"
       );
 
+      const insertImport = this.db.prepare(
+        "INSERT OR REPLACE INTO imports (file_path, local_name, exported_name, source_path) VALUES (?, ?, ?, ?)"
+      );
+      for (const imp of extracted.imports) {
+        insertImport.run(filePath, imp.localName, imp.exportedName, imp.sourcePath);
+      }
+
       const parentIds = new Map<string, number>();
       for (const sym of extracted.symbols) {
         if (sym.parentName === null) {
@@ -80,10 +87,29 @@ export class Indexer {
         }
       }
 
+      // Pass 1: same-file resolution (fastest, most precise)
       this.db.exec(`
         UPDATE call_edges
         SET callee_id = (
-          SELECT id FROM symbols WHERE symbols.name = call_edges.callee_name LIMIT 1
+          SELECT s.id FROM symbols s
+          WHERE s.name = call_edges.callee_name
+          AND s.file_path = (SELECT s2.file_path FROM symbols s2 WHERE s2.id = call_edges.caller_id)
+          AND s.is_anonymous = 0
+          LIMIT 1
+        )
+        WHERE callee_id IS NULL
+      `);
+
+      // Pass 2: import-based cross-file resolution
+      this.db.exec(`
+        UPDATE call_edges
+        SET callee_id = (
+          SELECT s.id FROM symbols s
+          JOIN imports i ON i.source_path = s.file_path AND i.exported_name = s.name
+          WHERE i.file_path = (SELECT s2.file_path FROM symbols s2 WHERE s2.id = call_edges.caller_id)
+          AND i.local_name = call_edges.callee_name
+          AND s.is_anonymous = 0
+          LIMIT 1
         )
         WHERE callee_id IS NULL
       `);

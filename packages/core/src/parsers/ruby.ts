@@ -20,7 +20,7 @@ export function parseRubyFile(filePath: string): ExtractedFile {
 
   walk(tree.rootNode, null, content, symbols);
 
-  return { path: filePath, language: "ruby" as const, hash, symbols };
+  return { path: filePath, language: "ruby" as const, hash, symbols, imports: [] };
 }
 
 function walk(

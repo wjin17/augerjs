@@ -26,6 +26,17 @@ CREATE INDEX IF NOT EXISTS idx_symbols_name ON symbols(name);
 CREATE INDEX IF NOT EXISTS idx_symbols_file ON symbols(file_path);
 CREATE INDEX IF NOT EXISTS idx_symbols_kind ON symbols(kind);
 
+-- Import map: which names each file imports and from where
+CREATE TABLE IF NOT EXISTS imports (
+  file_path     TEXT NOT NULL REFERENCES files(path) ON DELETE CASCADE,
+  local_name    TEXT NOT NULL,
+  exported_name TEXT NOT NULL,
+  source_path   TEXT NOT NULL,
+  PRIMARY KEY (file_path, local_name)
+);
+
+CREATE INDEX IF NOT EXISTS idx_imports_source ON imports(source_path, exported_name);
+
 -- Call graph
 CREATE TABLE IF NOT EXISTS call_edges (
   caller_id    INTEGER NOT NULL REFERENCES symbols(id) ON DELETE CASCADE,

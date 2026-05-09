@@ -176,6 +176,8 @@ export function handleTool(db: Database.Database, name: string, args: Record<str
   }
 }
 
+type TraceRow = WithLocation & { id: number; name: string; depth: number; is_anonymous: number };
+
 function traceGraph(
   db: Database.Database,
   startName: string,
@@ -185,31 +187,65 @@ function traceGraph(
   const cte =
     direction === "callers"
       ? `
-      WITH RECURSIVE chain(id, name, file_path, start_line, depth) AS (
-        SELECT s.id, s.name, s.file_path, s.start_line, 0 FROM symbols s WHERE s.name = ?
+      WITH RECURSIVE chain(id, name, file_path, start_line, depth, is_anonymous) AS (
+        SELECT s.id, s.name, s.file_path, s.start_line, 0, s.is_anonymous FROM symbols s WHERE s.name = ?
         UNION
-        SELECT s.id, s.name, s.file_path, s.start_line, c.depth + 1
+        SELECT s.id, s.name, s.file_path, s.start_line, c.depth + 1, s.is_anonymous
         FROM chain c
         JOIN call_edges e ON e.callee_id = c.id
         JOIN symbols s ON s.id = e.caller_id
         WHERE c.depth < ?
       )
-      SELECT DISTINCT id, name, file_path, start_line, depth FROM chain WHERE depth > 0 ORDER BY depth, name
+      SELECT DISTINCT id, name, file_path, start_line, depth, is_anonymous FROM chain WHERE depth > 0 ORDER BY depth, name
     `
       : `
-      WITH RECURSIVE chain(id, name, file_path, start_line, depth) AS (
-        SELECT s.id, s.name, s.file_path, s.start_line, 0 FROM symbols s WHERE s.name = ?
+      WITH RECURSIVE chain(id, name, file_path, start_line, depth, is_anonymous) AS (
+        SELECT s.id, s.name, s.file_path, s.start_line, 0, s.is_anonymous FROM symbols s WHERE s.name = ?
         UNION
-        SELECT s.id, s.name, s.file_path, s.start_line, c.depth + 1
+        SELECT s.id, s.name, s.file_path, s.start_line, c.depth + 1, s.is_anonymous
         FROM chain c
         JOIN call_edges e ON e.caller_id = c.id
         JOIN symbols s ON s.id = e.callee_id
         WHERE c.depth < ?
       )
-      SELECT DISTINCT id, name, file_path, start_line, depth FROM chain WHERE depth > 0 ORDER BY depth, name
+      SELECT DISTINCT id, name, file_path, start_line, depth, is_anonymous FROM chain WHERE depth > 0 ORDER BY depth, name
     `;
-  const rows = db.prepare(cte).all(startName, maxDepth) as WithLocation[];
-  return { trace: rows.map(withLocation) };
+  const rows = db.prepare(cte).all(startName, maxDepth) as TraceRow[];
+
+  // Group anonymous entries by depth+file to reduce noise.
+  // Named symbols are emitted individually; anonymous ones become summary entries.
+  const anonGroups = new Map<string, { count: number; file_path: string; start_line: number; depth: number }>();
+  const named: ReturnType<typeof withLocation>[] = [];
+
+  for (const row of rows) {
+    if (row.is_anonymous) {
+      const key = `${row.depth}:${row.file_path}`;
+      if (!anonGroups.has(key)) {
+        anonGroups.set(key, { count: 0, file_path: row.file_path, start_line: row.start_line, depth: row.depth });
+      }
+      anonGroups.get(key)!.count++;
+    } else {
+      named.push(withLocation(row));
+    }
+  }
+
+  const summaries = [...anonGroups.values()].map(({ count, file_path, start_line, depth }) => ({
+    name: `[${count} anonymous callback${count === 1 ? "" : "s"}]`,
+    file_path,
+    start_line,
+    depth,
+    location: `${file_path}:${start_line}`,
+  }));
+
+  const trace = [...named, ...summaries].sort((a, b) => {
+    const da = (a as Record<string, unknown>)["depth"] as number ?? 0;
+    const db_ = (b as Record<string, unknown>)["depth"] as number ?? 0;
+    const na = (a as Record<string, unknown>)["name"] as string ?? "";
+    const nb = (b as Record<string, unknown>)["name"] as string ?? "";
+    return da !== db_ ? da - db_ : na.localeCompare(nb);
+  });
+
+  return { trace };
 }
 
 export async function runMcpStdio(getDb: GetDb) {

@@ -133,6 +133,58 @@ describe("Indexer", () => {
     });
   });
 
+  describe("cross-file resolution", () => {
+    const utilsFixture = `${fixtures}/cross-file/utils.ts`;
+    const mainFixture = `${fixtures}/cross-file/main.ts`;
+
+    it("stores imports for a file with named imports", () => {
+      indexer.indexFile(utilsFixture, "typescript");
+      indexer.indexFile(mainFixture, "typescript");
+      const rows = db.prepare("SELECT local_name, exported_name FROM imports WHERE file_path = ?").all(mainFixture) as
+        { local_name: string; exported_name: string }[];
+      expect(rows).toContainEqual({ local_name: "formatDate", exported_name: "formatDate" });
+      expect(rows).toContainEqual({ local_name: "pd", exported_name: "parseDate" });
+    });
+
+    it("resolves callee_id across files via named imports", () => {
+      indexer.indexFile(utilsFixture, "typescript");
+      indexer.indexFile(mainFixture, "typescript");
+      const formatDateSym = db.prepare("SELECT id FROM symbols WHERE name = 'formatDate'").get() as { id: number };
+      const edge = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'").get() as
+        { callee_id: number | null } | undefined;
+      expect(edge?.callee_id).toBe(formatDateSym.id);
+    });
+
+    it("resolves aliased import callee_id via exported_name", () => {
+      indexer.indexFile(utilsFixture, "typescript");
+      indexer.indexFile(mainFixture, "typescript");
+      const parseDateSym = db.prepare("SELECT id FROM symbols WHERE name = 'parseDate'").get() as { id: number };
+      const edge = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'pd'").get() as
+        { callee_id: number | null } | undefined;
+      expect(edge?.callee_id).toBe(parseDateSym.id);
+    });
+
+    it("resolves edges retroactively when callee file is indexed after caller", () => {
+      indexer.indexFile(mainFixture, "typescript");
+      const before = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'").get() as
+        { callee_id: number | null } | undefined;
+      expect(before?.callee_id).toBeNull();
+
+      indexer.indexFile(utilsFixture, "typescript");
+      const after = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'").get() as
+        { callee_id: number | null } | undefined;
+      expect(after?.callee_id).not.toBeNull();
+    });
+
+    it("cleans up imports on re-index", () => {
+      indexer.indexFile(utilsFixture, "typescript");
+      indexer.indexFile(mainFixture, "typescript");
+      indexer.indexFile(mainFixture, "typescript");
+      const count = (db.prepare("SELECT COUNT(*) as c FROM imports WHERE file_path = ?").get(mainFixture) as { c: number }).c;
+      expect(count).toBe(2);
+    });
+  });
+
   describe("error handling", () => {
     it("does not throw on a missing file", () => {
       vi.spyOn(console, "error").mockImplementation(() => {});
