@@ -71,4 +71,77 @@ describe("typescript parser", () => {
     const greet = result.symbols.find((s) => s.name === "greet");
     expect(greet?.callees).toContain("formatName");
   });
+
+  it("extracts class field arrow functions as methods", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const sym = result.symbols.find((s) => s.name === "onClick");
+    expect(sym).toBeDefined();
+    expect(sym?.kind).toBe("method");
+    expect(sym?.parentName).toBe("Greeter");
+    expect(sym?.isAnonymous).toBe(false);
+  });
+
+  it("preserves JsDoc on class field arrow functions", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const sym = result.symbols.find((s) => s.name === "onClick");
+    expect(sym?.docstring).toBe("Handles click.");
+  });
+
+  it("extracts object literal as constant with kind=constant", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const sym = result.symbols.find((s) => s.name === "routes");
+    expect(sym).toBeDefined();
+    expect(sym?.kind).toBe("constant");
+    expect(sym?.isAnonymous).toBe(false);
+  });
+
+  it("extracts object literal arrow property as method", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const sym = result.symbols.find((s) => s.name === "get");
+    expect(sym).toBeDefined();
+    expect(sym?.kind).toBe("method");
+    expect(sym?.parentName).toBe("routes");
+    expect(sym?.isAnonymous).toBe(false);
+  });
+
+  it("extracts object literal shorthand method", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const sym = result.symbols.find((s) => s.name === "post");
+    expect(sym).toBeDefined();
+    expect(sym?.kind).toBe("method");
+    expect(sym?.parentName).toBe("routes");
+    expect(sym?.isAnonymous).toBe(false);
+  });
+
+  it("extracts anonymous callbacks with synthetic names", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const anons = result.symbols.filter((s) => s.isAnonymous);
+    expect(anons.length).toBeGreaterThan(0);
+    for (const anon of anons) {
+      expect(anon.name).toMatch(/^<anonymous:\d+/);
+    }
+  });
+
+  it("sets parentName on anonymous callbacks to their enclosing function", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const anons = result.symbols.filter((s) => s.isAnonymous);
+    expect(anons.every((s) => s.parentName === "processItems")).toBe(true);
+  });
+
+  it("marks all non-anonymous symbols as isAnonymous=false", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const named = result.symbols.filter((s) => !s.isAnonymous);
+    expect(named.length).toBeGreaterThan(0);
+    for (const sym of named) {
+      expect(sym.name).not.toMatch(/^<anonymous/);
+    }
+  });
 });

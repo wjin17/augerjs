@@ -41,6 +41,7 @@ function walk(
         endLine: node.endPosition.row + 1,
         parentName,
         callees: extractRubyCallees(node, source),
+        isAnonymous: false,
       });
     }
   } else if (node.type === "class") {
@@ -55,6 +56,7 @@ function walk(
       endLine: node.endPosition.row + 1,
       parentName: null,
       callees: [],
+      isAnonymous: false,
     });
     for (let i = 0; i < node.namedChildCount; i++) {
       walk(node.namedChild(i)!, className, source, out);

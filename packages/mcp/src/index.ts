@@ -95,13 +95,13 @@ export function handleTool(db: Database.Database, name: string, args: Record<str
   switch (name) {
     case "find_symbol": {
       const rows = db
-        .prepare("SELECT name, kind, file_path, start_line FROM symbols WHERE name = ?")
+        .prepare("SELECT name, kind, file_path, start_line FROM symbols WHERE name = ? AND is_anonymous = 0")
         .all(args["name"]) as WithLocation[];
       return { matches: rows.map(withLocation) };
     }
     case "get_symbol": {
       const syms = db
-        .prepare("SELECT * FROM symbols WHERE name = ?")
+        .prepare("SELECT * FROM symbols WHERE name = ? AND is_anonymous = 0")
         .all(args["name"]) as (WithLocation & { id: number })[];
       if (syms.length === 0) return { found: false };
       const results = syms.map((sym) => {
@@ -132,7 +132,7 @@ export function handleTool(db: Database.Database, name: string, args: Record<str
         .prepare(
           `SELECT s.name, s.kind, s.file_path, s.start_line, s.signature
            FROM symbols_fts f JOIN symbols s ON s.id = f.rowid
-           WHERE symbols_fts MATCH ? LIMIT 50`
+           WHERE symbols_fts MATCH ? AND s.is_anonymous = 0 LIMIT 50`
         )
         .all(args["query"]) as WithLocation[];
       return { results: rows.map(withLocation) };

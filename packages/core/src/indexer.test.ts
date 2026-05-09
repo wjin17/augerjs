@@ -25,14 +25,25 @@ describe("Indexer", () => {
   });
 
   describe("indexFile — TypeScript", () => {
-    it("stores all symbols", () => {
+    it("stores all named symbols", () => {
       indexer.indexFile(tsFixture, "typescript");
-      const names = (db.prepare("SELECT name FROM symbols").all() as { name: string }[])
+      const names = (db.prepare("SELECT name FROM symbols WHERE is_anonymous = 0").all() as { name: string }[])
         .map((r) => r.name)
         .sort();
       expect(names).toEqual([
-        "Greeter", "User", "UserId", "add", "double", "formatName", "greet", "greetAsync", "identity",
+        "Greeter", "User", "UserId", "add", "double", "formatName", "get",
+        "greet", "greetAsync", "identity", "onClick", "post", "processItems", "routes",
       ]);
+    });
+
+    it("stores anonymous callback symbols", () => {
+      indexer.indexFile(tsFixture, "typescript");
+      const anons = (db.prepare("SELECT name FROM symbols WHERE is_anonymous = 1").all() as { name: string }[])
+        .map((r) => r.name);
+      expect(anons.length).toBeGreaterThan(0);
+      for (const name of anons) {
+        expect(name).toMatch(/^<anonymous:\d+/);
+      }
     });
 
     it("stores the file record with correct language", () => {
@@ -92,8 +103,8 @@ describe("Indexer", () => {
     it("replaces symbols on second index — no duplicates", () => {
       indexer.indexFile(tsFixture, "typescript");
       indexer.indexFile(tsFixture, "typescript");
-      const count = (db.prepare("SELECT COUNT(*) as c FROM symbols").get() as { c: number }).c;
-      expect(count).toBe(9);
+      const named = (db.prepare("SELECT COUNT(*) as c FROM symbols WHERE is_anonymous = 0").get() as { c: number }).c;
+      expect(named).toBe(14);
     });
   });
 

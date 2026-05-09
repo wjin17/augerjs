@@ -17,6 +17,7 @@ CREATE TABLE IF NOT EXISTS symbols (
   start_line   INTEGER NOT NULL,
   end_line     INTEGER NOT NULL,
   parent_id    INTEGER REFERENCES symbols(id) ON DELETE CASCADE,
+  is_anonymous INTEGER NOT NULL DEFAULT 0,
   rails_kind   TEXT,
   rails_meta   TEXT
 );

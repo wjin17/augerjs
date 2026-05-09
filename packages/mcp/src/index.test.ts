@@ -40,6 +40,11 @@ describe("MCP tools", () => {
       const result = handleTool(db, "find_symbol", { name: "doesNotExist" }) as any;
       expect(result.matches).toHaveLength(0);
     });
+
+    it("does not return anonymous symbols", () => {
+      const result = handleTool(db, "find_symbol", { name: "<anonymous:46>" }) as any;
+      expect(result.matches).toHaveLength(0);
+    });
   });
 
   describe("get_symbol", () => {
@@ -67,6 +72,11 @@ describe("MCP tools", () => {
 
     it("returns found: false for an unknown symbol", () => {
       const result = handleTool(db, "get_symbol", { name: "doesNotExist" }) as any;
+      expect(result.found).toBe(false);
+    });
+
+    it("does not return anonymous symbols", () => {
+      const result = handleTool(db, "get_symbol", { name: "<anonymous:46>" }) as any;
       expect(result.found).toBe(false);
     });
 
@@ -144,6 +154,11 @@ describe("MCP tools", () => {
       const result = handleTool(db, "search", { query: "zzznomatch" }) as any;
       expect(result.results).toHaveLength(0);
     });
+
+    it("does not return anonymous symbols", () => {
+      const result = handleTool(db, "search", { query: "anonymous" }) as any;
+      expect(result.results).toHaveLength(0);
+    });
   });
 
   describe("get_file_symbols", () => {
@@ -152,9 +167,12 @@ describe("MCP tools", () => {
         path: `${fixtures}/typescript/sample.ts`,
       }) as any;
       const names = result.symbols.map((s: any) => s.name).sort();
-      expect(names).toEqual([
-        "Greeter", "User", "UserId", "add", "double", "formatName", "greet", "greetAsync", "identity",
+      const namedNames = names.filter((n: string) => !n.startsWith("<anonymous"));
+      expect(namedNames).toEqual([
+        "Greeter", "User", "UserId", "add", "double", "formatName", "get",
+        "greet", "greetAsync", "identity", "onClick", "post", "processItems", "routes",
       ]);
+      expect(names.filter((n: string) => n.startsWith("<anonymous")).length).toBeGreaterThan(0);
     });
 
     it("includes location on each symbol", () => {

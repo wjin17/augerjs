@@ -29,8 +29,8 @@ export class Indexer {
         .run(filePath, language, extracted.hash, Date.now());
 
       const insertSymbol = this.db.prepare(`
-        INSERT INTO symbols (file_path, name, kind, signature, docstring, start_line, end_line, parent_id)
-        VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        INSERT INTO symbols (file_path, name, kind, signature, docstring, start_line, end_line, parent_id, is_anonymous)
+        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
       `);
 
       const insertEdge = this.db.prepare(
@@ -48,7 +48,8 @@ export class Indexer {
             sym.docstring,
             sym.startLine,
             sym.endLine,
-            null
+            null,
+            sym.isAnonymous ? 1 : 0
           );
           parentIds.set(sym.name, Number(result.lastInsertRowid));
         }
@@ -65,7 +66,8 @@ export class Indexer {
             sym.docstring,
             sym.startLine,
             sym.endLine,
-            parentId
+            parentId,
+            sym.isAnonymous ? 1 : 0
           );
           for (const callee of sym.callees) {
             insertEdge.run(Number(result.lastInsertRowid), callee);
