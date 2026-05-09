@@ -41,6 +41,14 @@ export class ProjectRegistry {
     return findProjectRoot(dir);
   }
 
+  closeProject(root: string) {
+    const ctx = this.projects.get(root);
+    if (!ctx) return;
+    ctx.watcher.close();
+    ctx.db.close();
+    this.projects.delete(root);
+  }
+
   close() {
     for (const ctx of this.projects.values()) {
       ctx.watcher.close();
