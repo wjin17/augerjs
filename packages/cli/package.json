@@ -9,7 +9,7 @@
   "bin": { "auger": "./dist/index.js" },
   "files": ["dist"],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && chmod +x dist/index.js",
     "typecheck": "tsc --noEmit",
     "prepublishOnly": "bun run build"
   },
