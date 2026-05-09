@@ -6,10 +6,7 @@ import { join, resolve } from "node:path";
 import {
   findProjectRoot,
   dbPathForRoot,
-  resolveManifest,
   openDb,
-  Indexer,
-  startWatcher,
   ProjectRegistry,
 } from "@augerjs/core";
 import { runMcpStdio, handleTool } from "@augerjs/mcp";
@@ -59,22 +56,6 @@ program
         );
       }
     }
-  });
-
-// ── watch ───────────────────────────────────────────────────────────────────
-
-program
-  .command("watch")
-  .description("Run the file watcher daemon (keeps the index current in the background)")
-  .action(() => {
-    const rootDir = findProjectRoot(process.cwd());
-    const manifest = resolveManifest(rootDir);
-    const db = openDb(dbPathForRoot(rootDir));
-    const indexer = new Indexer(db);
-    console.error(`auger: watching ${rootDir}`);
-    startWatcher(manifest, rootDir, db, indexer);
-    process.on("SIGINT", () => process.exit(0));
-    process.on("SIGTERM", () => process.exit(0));
   });
 
 // ── start ───────────────────────────────────────────────────────────────────
