@@ -1,12 +1,17 @@
 {
   "name": "@augerjs/mcp",
   "version": "0.1.1",
+  "description": "MCP server for auger — exposes symbol index tools to Claude Code",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/wjin17/augerjs" },
   "type": "module",
   "main": "./dist/index.js",
   "exports": { ".": "./dist/index.js" },
+  "files": ["dist"],
   "scripts": {
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "@augerjs/core": "workspace:*",

@@ -1,14 +1,19 @@
 {
   "name": "@augerjs/core",
   "version": "0.1.1",
+  "description": "Core indexing engine for auger — parses TypeScript/Ruby source files into a SQLite symbol index",
+  "license": "MIT",
+  "repository": { "type": "git", "url": "https://github.com/wjin17/augerjs" },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": { ".": "./dist/index.js" },
+  "files": ["dist"],
   "scripts": {
     "prebuild": "mkdir -p dist/db && cp src/db/schema.sql dist/db/",
     "build": "tsc",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "bun run build"
   },
   "dependencies": {
     "better-sqlite3": "^11.0.0",
