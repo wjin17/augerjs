@@ -27,6 +27,10 @@ export function startWatcher(
     return null;
   };
 
+  const selectFile = db.prepare<[string], { hash: string; indexed_at: number }>(
+    "SELECT hash, indexed_at FROM files WHERE path = ?"
+  );
+
   const handle = (path: string) => {
     const lang = langFor(path);
     if (!lang) return;
@@ -35,9 +39,9 @@ export function startWatcher(
     try {
       const mtime = statSync(fullPath).mtimeMs;
 
-      const existing = db
-        .prepare("SELECT hash, indexed_at FROM files WHERE path = ?")
-        .get(fullPath) as { hash: string; indexed_at: number } | undefined;
+      const existing = selectFile.get(fullPath) as
+        | { hash: string; indexed_at: number }
+        | undefined;
 
       // Fast path: file mtime predates last index — content cannot have changed.
       if (existing && mtime < existing.indexed_at) return;
@@ -52,15 +56,17 @@ export function startWatcher(
     }
   };
 
-  watcher.on("add", handle);
-  watcher.on("change", handle);
-  watcher.on("unlink", (path) => {
+  const handleUnlink = (path: string) => {
     try {
       indexer.removeFile(`${rootDir}/${path}`);
     } catch (err) {
       console.error(`[auger] failed to remove ${path}:`, err);
     }
-  });
+  };
+
+  watcher.on("add", handle);
+  watcher.on("change", handle);
+  watcher.on("unlink", handleUnlink);
 
   const ready = new Promise<void>((resolve) => {
     watcher.once("ready", () => {
