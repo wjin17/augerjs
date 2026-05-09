@@ -106,8 +106,8 @@ program
 
 // ── query commands ───────────────────────────────────────────────────────────
 
-function openIndex(): ReturnType<typeof openDb> {
-  const rootDir = findProjectRoot(process.cwd());
+function openIndex(root?: string): ReturnType<typeof openDb> {
+  const rootDir = root ? findProjectRoot(root) : findProjectRoot(process.cwd());
   const dbPath = dbPathForRoot(rootDir);
   if (!existsSync(dbPath)) {
     console.error(`No index for ${rootDir}. Run \`auger start\` first.`);
@@ -123,37 +123,45 @@ function print(result: unknown) {
 program
   .command("find_symbol <name>")
   .description("Locate where a symbol is defined")
-  .action((name) => print(handleTool(openIndex(), "find_symbol", { name })));
+  .option("-r, --root <path>", "path inside the target project (default: cwd)")
+  .action((name, opts) => print(handleTool(openIndex(opts.root), "find_symbol", { name })));
 
 program
   .command("get_symbol <name>")
   .description("Full record: signature, docstring, callers, callees")
-  .action((name) => print(handleTool(openIndex(), "get_symbol", { name })));
+  .option("-r, --root <path>", "path inside the target project (default: cwd)")
+  .action((name, opts) => print(handleTool(openIndex(opts.root), "get_symbol", { name })));
 
 program
   .command("trace_callers <name>")
   .description("Recursive upstream call graph")
   .option("-d, --depth <n>", "max depth", "5")
+  .option("-r, --root <path>", "path inside the target project (default: cwd)")
   .action((name, opts) =>
-    print(handleTool(openIndex(), "trace_callers", { name, max_depth: Number(opts.depth) }))
+    print(handleTool(openIndex(opts.root), "trace_callers", { name, max_depth: Number(opts.depth) }))
   );
 
 program
   .command("trace_callees <name>")
   .description("Recursive downstream call graph")
   .option("-d, --depth <n>", "max depth", "5")
+  .option("-r, --root <path>", "path inside the target project (default: cwd)")
   .action((name, opts) =>
-    print(handleTool(openIndex(), "trace_callees", { name, max_depth: Number(opts.depth) }))
+    print(handleTool(openIndex(opts.root), "trace_callees", { name, max_depth: Number(opts.depth) }))
   );
 
 program
   .command("search <query>")
   .description("Full-text search over symbol names, signatures, and docstrings")
-  .action((query) => print(handleTool(openIndex(), "search", { query })));
+  .option("-r, --root <path>", "path inside the target project (default: cwd)")
+  .action((query, opts) => print(handleTool(openIndex(opts.root), "search", { query })));
 
 program
   .command("get_file_symbols <path>")
   .description("All symbols defined in a file")
-  .action((path) => print(handleTool(openIndex(), "get_file_symbols", { path: resolve(path) })));
+  .action((path) => {
+    const absPath = resolve(path);
+    print(handleTool(openIndex(absPath), "get_file_symbols", { path: absPath }));
+  });
 
 program.parseAsync();
