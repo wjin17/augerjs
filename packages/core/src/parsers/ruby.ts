@@ -46,7 +46,9 @@ function walk(
     }
   } else if (node.type === "class") {
     const nameNode = node.childForFieldName("name");
-    const className = nameNode ? source.slice(nameNode.startIndex, nameNode.endIndex) : "<anonymous>";
+    const className = nameNode
+      ? source.slice(nameNode.startIndex, nameNode.endIndex)
+      : "<anonymous>";
     out.push({
       name: className,
       kind: "class",

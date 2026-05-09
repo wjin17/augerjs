@@ -88,7 +88,8 @@ export function parseTypeScriptFile(filePath: string, project: Project): Extract
       const init = prop.getInitializer();
       if (!init) continue;
       const initKind = init.getKind();
-      if (initKind !== SyntaxKind.ArrowFunction && initKind !== SyntaxKind.FunctionExpression) continue;
+      if (initKind !== SyntaxKind.ArrowFunction && initKind !== SyntaxKind.FunctionExpression)
+        continue;
       symbols.push({
         name: prop.getName(),
         kind: "method",
@@ -187,7 +188,8 @@ export function parseTypeScriptFile(filePath: string, project: Project): Extract
             const paInit = pa.getInitializer?.() as Node | undefined;
             if (!paInit) continue;
             const paKind = paInit.getKind();
-            if (paKind !== SyntaxKind.ArrowFunction && paKind !== SyntaxKind.FunctionExpression) continue;
+            if (paKind !== SyntaxKind.ArrowFunction && paKind !== SyntaxKind.FunctionExpression)
+              continue;
             const propName = pa.getName() as string;
             symbols.push({
               name: propName,
@@ -270,7 +272,10 @@ function resolveImportPath(from: string, specifier: string): string | null {
 
 function buildArrowSignature(name: string, fn: FnInterface): string {
   const asyncPrefix = fn.isAsync() ? "async " : "";
-  const params = fn.getParameters().map((p) => p.getText()).join(", ");
+  const params = fn
+    .getParameters()
+    .map((p) => p.getText())
+    .join(", ");
   const ret = fn.getReturnTypeNode()?.getText();
   return `const ${name} = ${asyncPrefix}(${params})${ret ? `: ${ret}` : ""}`;
 }
@@ -304,7 +309,9 @@ function findEnclosingName(node: Node): string | null {
   return null;
 }
 
-function getJsDoc(node: { getJsDocs?: () => Array<{ getDescription: () => string }> }): string | null {
+function getJsDoc(node: {
+  getJsDocs?: () => Array<{ getDescription: () => string }>;
+}): string | null {
   const docs = node.getJsDocs?.() ?? [];
   if (docs.length === 0) return null;
   return docs.map((d) => d.getDescription().trim()).join("\n\n") || null;

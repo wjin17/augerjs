@@ -3,12 +3,7 @@ import { Command } from "commander";
 import { existsSync, readFileSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
-import {
-  findProjectRoot,
-  dbPathForRoot,
-  openDb,
-  ProjectRegistry,
-} from "@augerjs/core";
+import { findProjectRoot, dbPathForRoot, openDb, ProjectRegistry } from "@augerjs/core";
 import { runMcpStdio, handleTool } from "@augerjs/mcp";
 
 const program = new Command();
@@ -21,7 +16,11 @@ const MCP_ENTRY = { command: "npx", args: ["-y", "@augerjs/cli", "start"] };
 
 function readMcpConfig(mcpPath: string): Record<string, unknown> {
   if (!existsSync(mcpPath)) return { mcpServers: {} };
-  try { return JSON.parse(readFileSync(mcpPath, "utf8")); } catch { return { mcpServers: {} }; }
+  try {
+    return JSON.parse(readFileSync(mcpPath, "utf8"));
+  } catch {
+    return { mcpServers: {} };
+  }
 }
 
 function writeMcpEntry(mcpPath: string): "added" | "exists" {
@@ -51,8 +50,8 @@ program
     if (opts.global) {
       console.log(
         "\nAuger will auto-detect and index any project you open in Claude Code." +
-        "\nRestart Claude Code to activate." +
-        "\n\nOptional: add .auger.yml to a project to customise include/exclude patterns."
+          "\nRestart Claude Code to activate." +
+          "\n\nOptional: add .auger.yml to a project to customise include/exclude patterns."
       );
     } else {
       console.log("\nRestart Claude Code to activate.");
@@ -78,8 +77,14 @@ program
       process.stderr.write(`auger: ready (${rootDir})\n`);
     });
 
-    process.on("SIGINT", () => { registry.close(); process.exit(0); });
-    process.on("SIGTERM", () => { registry.close(); process.exit(0); });
+    process.on("SIGINT", () => {
+      registry.close();
+      process.exit(0);
+    });
+    process.on("SIGTERM", () => {
+      registry.close();
+      process.exit(0);
+    });
 
     await runMcpStdio((root?) => registry.getDb(root));
   });
@@ -98,7 +103,9 @@ program
       if (opts.json) {
         console.log(JSON.stringify({ project: rootDir, db: dbPath, indexed: false }));
       } else {
-        console.log(`No index for ${rootDir}.\nOpen this project in Claude Code to build the index.`);
+        console.log(
+          `No index for ${rootDir}.\nOpen this project in Claude Code to build the index.`
+        );
       }
       return;
     }
@@ -135,8 +142,8 @@ program
     const localMcp = resolve(".mcp.json");
     const globalConfig = readMcpConfig(globalMcp);
     const localConfig = readMcpConfig(localMcp);
-    const globalHas = !!((globalConfig.mcpServers as any)?.auger);
-    const localHas = !!((localConfig.mcpServers as any)?.auger);
+    const globalHas = !!(globalConfig.mcpServers as any)?.auger;
+    const localHas = !!(localConfig.mcpServers as any)?.auger;
 
     if (localHas) {
       check(true, `local MCP:  ${localMcp} → auger entry found (overrides global)`);
@@ -199,7 +206,9 @@ program
   .option("-d, --depth <n>", "max depth", "5")
   .option("-r, --root <path>", "path inside the target project (default: cwd)")
   .action((name, opts) =>
-    print(handleTool(openIndex(opts.root), "trace_callers", { name, max_depth: Number(opts.depth) }))
+    print(
+      handleTool(openIndex(opts.root), "trace_callers", { name, max_depth: Number(opts.depth) })
+    )
   );
 
 program
@@ -208,7 +217,9 @@ program
   .option("-d, --depth <n>", "max depth", "5")
   .option("-r, --root <path>", "path inside the target project (default: cwd)")
   .action((name, opts) =>
-    print(handleTool(openIndex(opts.root), "trace_callees", { name, max_depth: Number(opts.depth) }))
+    print(
+      handleTool(openIndex(opts.root), "trace_callees", { name, max_depth: Number(opts.depth) })
+    )
   );
 
 program

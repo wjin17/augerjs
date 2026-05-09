@@ -23,9 +23,7 @@ export class Indexer {
     const tx = this.db.transaction(() => {
       this.db.prepare("DELETE FROM files WHERE path = ?").run(filePath);
       this.db
-        .prepare(
-          "INSERT INTO files (path, language, hash, indexed_at) VALUES (?, ?, ?, ?)"
-        )
+        .prepare("INSERT INTO files (path, language, hash, indexed_at) VALUES (?, ?, ?, ?)")
         .run(filePath, language, extracted.hash, Date.now());
 
       const insertSymbol = this.db.prepare(`

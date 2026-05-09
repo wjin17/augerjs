@@ -50,7 +50,10 @@ describe("openDb", () => {
   it("FTS trigger indexes symbols on insert", () => {
     const db = open();
     db.prepare("INSERT INTO files (path, language, hash, indexed_at) VALUES (?, ?, ?, ?)").run(
-      "/f.ts", "typescript", "abc", Date.now()
+      "/f.ts",
+      "typescript",
+      "abc",
+      Date.now()
     );
     db.prepare(
       "INSERT INTO symbols (file_path, name, kind, signature, docstring, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?, ?)"
@@ -63,11 +66,16 @@ describe("openDb", () => {
   it("FTS trigger removes symbols on delete", () => {
     const db = open();
     db.prepare("INSERT INTO files (path, language, hash, indexed_at) VALUES (?, ?, ?, ?)").run(
-      "/f.ts", "typescript", "abc", Date.now()
+      "/f.ts",
+      "typescript",
+      "abc",
+      Date.now()
     );
-    const { lastInsertRowid } = db.prepare(
-      "INSERT INTO symbols (file_path, name, kind, signature, docstring, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?, ?)"
-    ).run("/f.ts", "myFn", "function", "function myFn()", null, 1, 5);
+    const { lastInsertRowid } = db
+      .prepare(
+        "INSERT INTO symbols (file_path, name, kind, signature, docstring, start_line, end_line) VALUES (?, ?, ?, ?, ?, ?, ?)"
+      )
+      .run("/f.ts", "myFn", "function", "function myFn()", null, 1, 5);
 
     db.prepare("DELETE FROM symbols WHERE id = ?").run(lastInsertRowid);
     const rows = db.prepare("SELECT name FROM symbols_fts WHERE symbols_fts MATCH 'myFn'").all();

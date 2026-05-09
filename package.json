@@ -11,12 +11,18 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "bun run --filter '*' typecheck",
-    "lint": "bun run --filter '*' lint"
+    "lint": "eslint packages/*/src",
+    "format": "prettier --write packages/*/src",
+    "format:check": "prettier --check packages/*/src"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^20.0.0",
+    "eslint": "9",
+    "prettier": "^3.8.3",
     "typescript": "^5.5.0",
-    "vitest": "^2.0.0",
-    "@types/node": "^20.0.0"
+    "typescript-eslint": "^8.59.2",
+    "vitest": "^2.0.0"
   },
   "trustedDependencies": [
     "better-sqlite3",

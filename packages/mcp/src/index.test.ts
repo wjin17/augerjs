@@ -169,8 +169,20 @@ describe("MCP tools", () => {
       const names = result.symbols.map((s: any) => s.name).sort();
       const namedNames = names.filter((n: string) => !n.startsWith("<anonymous"));
       expect(namedNames).toEqual([
-        "Greeter", "User", "UserId", "add", "double", "formatName", "get",
-        "greet", "greetAsync", "identity", "onClick", "post", "processItems", "routes",
+        "Greeter",
+        "User",
+        "UserId",
+        "add",
+        "double",
+        "formatName",
+        "get",
+        "greet",
+        "greetAsync",
+        "identity",
+        "onClick",
+        "post",
+        "processItems",
+        "routes",
       ]);
       expect(names.filter((n: string) => n.startsWith("<anonymous")).length).toBeGreaterThan(0);
     });

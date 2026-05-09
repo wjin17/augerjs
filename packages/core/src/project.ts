@@ -4,7 +4,15 @@ import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 
 // Strong markers unambiguously identify a project root.
-const STRONG_MARKERS = [".auger.yml", "package.json", "go.mod", "Cargo.toml", "Gemfile", "pyproject.toml", ".git"];
+const STRONG_MARKERS = [
+  ".auger.yml",
+  "package.json",
+  "go.mod",
+  "Cargo.toml",
+  "Gemfile",
+  "pyproject.toml",
+  ".git",
+];
 // Weak markers are checked only if no strong marker is found anywhere in the tree —
 // they appear too often in subdirectories (e.g. tsconfig.json in src/).
 const WEAK_MARKERS = ["tsconfig.json"];

@@ -27,19 +27,34 @@ describe("Indexer", () => {
   describe("indexFile — TypeScript", () => {
     it("stores all named symbols", () => {
       indexer.indexFile(tsFixture, "typescript");
-      const names = (db.prepare("SELECT name FROM symbols WHERE is_anonymous = 0").all() as { name: string }[])
+      const names = (
+        db.prepare("SELECT name FROM symbols WHERE is_anonymous = 0").all() as { name: string }[]
+      )
         .map((r) => r.name)
         .sort();
       expect(names).toEqual([
-        "Greeter", "User", "UserId", "add", "double", "formatName", "get",
-        "greet", "greetAsync", "identity", "onClick", "post", "processItems", "routes",
+        "Greeter",
+        "User",
+        "UserId",
+        "add",
+        "double",
+        "formatName",
+        "get",
+        "greet",
+        "greetAsync",
+        "identity",
+        "onClick",
+        "post",
+        "processItems",
+        "routes",
       ]);
     });
 
     it("stores anonymous callback symbols", () => {
       indexer.indexFile(tsFixture, "typescript");
-      const anons = (db.prepare("SELECT name FROM symbols WHERE is_anonymous = 1").all() as { name: string }[])
-        .map((r) => r.name);
+      const anons = (
+        db.prepare("SELECT name FROM symbols WHERE is_anonymous = 1").all() as { name: string }[]
+      ).map((r) => r.name);
       expect(anons.length).toBeGreaterThan(0);
       for (const name of anons) {
         expect(name).toMatch(/^<anonymous:\d+/);
@@ -72,9 +87,7 @@ describe("Indexer", () => {
 
     it("indexes symbols into FTS", () => {
       indexer.indexFile(tsFixture, "typescript");
-      const rows = db
-        .prepare("SELECT name FROM symbols_fts WHERE symbols_fts MATCH 'add'")
-        .all();
+      const rows = db.prepare("SELECT name FROM symbols_fts WHERE symbols_fts MATCH 'add'").all();
       expect(rows.length).toBeGreaterThan(0);
     });
   });
@@ -103,7 +116,11 @@ describe("Indexer", () => {
     it("replaces symbols on second index — no duplicates", () => {
       indexer.indexFile(tsFixture, "typescript");
       indexer.indexFile(tsFixture, "typescript");
-      const named = (db.prepare("SELECT COUNT(*) as c FROM symbols WHERE is_anonymous = 0").get() as { c: number }).c;
+      const named = (
+        db.prepare("SELECT COUNT(*) as c FROM symbols WHERE is_anonymous = 0").get() as {
+          c: number;
+        }
+      ).c;
       expect(named).toBe(14);
     });
   });
@@ -119,9 +136,7 @@ describe("Indexer", () => {
     it("cascades to symbols", () => {
       indexer.indexFile(tsFixture, "typescript");
       indexer.removeFile(tsFixture);
-      const symbols = db
-        .prepare("SELECT * FROM symbols WHERE file_path = ?")
-        .all(tsFixture);
+      const symbols = db.prepare("SELECT * FROM symbols WHERE file_path = ?").all(tsFixture);
       expect(symbols).toHaveLength(0);
     });
 
@@ -140,8 +155,9 @@ describe("Indexer", () => {
     it("stores imports for a file with named imports", () => {
       indexer.indexFile(utilsFixture, "typescript");
       indexer.indexFile(mainFixture, "typescript");
-      const rows = db.prepare("SELECT local_name, exported_name FROM imports WHERE file_path = ?").all(mainFixture) as
-        { local_name: string; exported_name: string }[];
+      const rows = db
+        .prepare("SELECT local_name, exported_name FROM imports WHERE file_path = ?")
+        .all(mainFixture) as { local_name: string; exported_name: string }[];
       expect(rows).toContainEqual({ local_name: "formatDate", exported_name: "formatDate" });
       expect(rows).toContainEqual({ local_name: "pd", exported_name: "parseDate" });
     });
@@ -149,30 +165,38 @@ describe("Indexer", () => {
     it("resolves callee_id across files via named imports", () => {
       indexer.indexFile(utilsFixture, "typescript");
       indexer.indexFile(mainFixture, "typescript");
-      const formatDateSym = db.prepare("SELECT id FROM symbols WHERE name = 'formatDate'").get() as { id: number };
-      const edge = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'").get() as
-        { callee_id: number | null } | undefined;
+      const formatDateSym = db
+        .prepare("SELECT id FROM symbols WHERE name = 'formatDate'")
+        .get() as { id: number };
+      const edge = db
+        .prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'")
+        .get() as { callee_id: number | null } | undefined;
       expect(edge?.callee_id).toBe(formatDateSym.id);
     });
 
     it("resolves aliased import callee_id via exported_name", () => {
       indexer.indexFile(utilsFixture, "typescript");
       indexer.indexFile(mainFixture, "typescript");
-      const parseDateSym = db.prepare("SELECT id FROM symbols WHERE name = 'parseDate'").get() as { id: number };
+      const parseDateSym = db.prepare("SELECT id FROM symbols WHERE name = 'parseDate'").get() as {
+        id: number;
+      };
       const edge = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'pd'").get() as
-        { callee_id: number | null } | undefined;
+        | { callee_id: number | null }
+        | undefined;
       expect(edge?.callee_id).toBe(parseDateSym.id);
     });
 
     it("resolves edges retroactively when callee file is indexed after caller", () => {
       indexer.indexFile(mainFixture, "typescript");
-      const before = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'").get() as
-        { callee_id: number | null } | undefined;
+      const before = db
+        .prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'")
+        .get() as { callee_id: number | null } | undefined;
       expect(before?.callee_id).toBeNull();
 
       indexer.indexFile(utilsFixture, "typescript");
-      const after = db.prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'").get() as
-        { callee_id: number | null } | undefined;
+      const after = db
+        .prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'formatDate'")
+        .get() as { callee_id: number | null } | undefined;
       expect(after?.callee_id).not.toBeNull();
     });
 
@@ -180,7 +204,11 @@ describe("Indexer", () => {
       indexer.indexFile(utilsFixture, "typescript");
       indexer.indexFile(mainFixture, "typescript");
       indexer.indexFile(mainFixture, "typescript");
-      const count = (db.prepare("SELECT COUNT(*) as c FROM imports WHERE file_path = ?").get(mainFixture) as { c: number }).c;
+      const count = (
+        db.prepare("SELECT COUNT(*) as c FROM imports WHERE file_path = ?").get(mainFixture) as {
+          c: number;
+        }
+      ).c;
       expect(count).toBe(2);
     });
   });

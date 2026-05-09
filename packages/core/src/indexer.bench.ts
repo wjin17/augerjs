@@ -126,18 +126,26 @@ describe("find symbol by name — 1 file", () => {
   });
   afterAll(() => db.close());
 
-  bench(`auger — ${N_AUGER}× WHERE name = 'add'`, () => {
-    let n = 0;
-    for (let i = 0; i < N_AUGER; i++) n += (findStmt.all("add") as unknown[]).length;
-    return n;
-  }, { time: BENCH_TIME });
+  bench(
+    `auger — ${N_AUGER}× WHERE name = 'add'`,
+    () => {
+      let n = 0;
+      for (let i = 0; i < N_AUGER; i++) n += (findStmt.all("add") as unknown[]).length;
+      return n;
+    },
+    { time: BENCH_TIME }
+  );
 
-  bench("grep — 1× regex scan (fork+exec+read+match)", () => {
-    // Approximate: matches `function add(` and `const add =` but misses arrow
-    // shorthands, method shorthand, class fields — and gets false positives in
-    // comments and strings.
-    execSync(`grep -nE "(function|const)\\s+add[\\s(=<]" "${tsFixture}"`, { stdio: "pipe" });
-  }, { time: BENCH_TIME });
+  bench(
+    "grep — 1× regex scan (fork+exec+read+match)",
+    () => {
+      // Approximate: matches `function add(` and `const add =` but misses arrow
+      // shorthands, method shorthand, class fields — and gets false positives in
+      // comments and strings.
+      execSync(`grep -nE "(function|const)\\s+add[\\s(=<]" "${tsFixture}"`, { stdio: "pipe" });
+    },
+    { time: BENCH_TIME }
+  );
 });
 
 // ── search: full-text across names, signatures, docstrings ──────────────────
@@ -156,15 +164,23 @@ describe("full-text search — 1 file", () => {
   });
   afterAll(() => db.close());
 
-  bench(`auger — ${N_AUGER}× FTS5 MATCH (porter-stemmed, name+sig+doc)`, () => {
-    let n = 0;
-    for (let i = 0; i < N_AUGER; i++) n += (ftsStmt.all("format*") as unknown[]).length;
-    return n;
-  }, { time: BENCH_TIME });
+  bench(
+    `auger — ${N_AUGER}× FTS5 MATCH (porter-stemmed, name+sig+doc)`,
+    () => {
+      let n = 0;
+      for (let i = 0; i < N_AUGER; i++) n += (ftsStmt.all("format*") as unknown[]).length;
+      return n;
+    },
+    { time: BENCH_TIME }
+  );
 
-  bench("grep — 1× raw line scan", () => {
-    execSync(`grep -n "format" "${tsFixture}"`, { stdio: "pipe" });
-  }, { time: BENCH_TIME });
+  bench(
+    "grep — 1× raw line scan",
+    () => {
+      execSync(`grep -n "format" "${tsFixture}"`, { stdio: "pipe" });
+    },
+    { time: BENCH_TIME }
+  );
 });
 
 // ── get_file_symbols: enumerate all symbols in a file ───────────────────────
@@ -182,20 +198,28 @@ describe("list file symbols — 1 file", () => {
   });
   afterAll(() => db.close());
 
-  bench(`auger — ${N_AUGER}× WHERE file_path = ?`, () => {
-    let n = 0;
-    for (let i = 0; i < N_AUGER; i++) n += (listStmt.all(tsFixture) as unknown[]).length;
-    return n;
-  }, { time: BENCH_TIME });
+  bench(
+    `auger — ${N_AUGER}× WHERE file_path = ?`,
+    () => {
+      let n = 0;
+      for (let i = 0; i < N_AUGER; i++) n += (listStmt.all(tsFixture) as unknown[]).length;
+      return n;
+    },
+    { time: BENCH_TIME }
+  );
 
-  bench("grep+awk — 1× multi-pattern heuristic (misses class fields, obj methods)", () => {
-    // Covers only the most common declaration forms; class field arrows, object
-    // literal methods, and anonymous callbacks require further passes.
-    execSync(
-      `grep -nE "^(export )?(async )?(function|class|interface) [A-Za-z_]|^(export )?(const|type) [A-Za-z_]+ =" "${tsFixture}" | awk -F: '{print $1, substr($0, index($0,$2))}'`,
-      { stdio: "pipe" }
-    );
-  }, { time: BENCH_TIME });
+  bench(
+    "grep+awk — 1× multi-pattern heuristic (misses class fields, obj methods)",
+    () => {
+      // Covers only the most common declaration forms; class field arrows, object
+      // literal methods, and anonymous callbacks require further passes.
+      execSync(
+        `grep -nE "^(export )?(async )?(function|class|interface) [A-Za-z_]|^(export )?(const|type) [A-Za-z_]+ =" "${tsFixture}" | awk -F: '{print $1, substr($0, index($0,$2))}'`,
+        { stdio: "pipe" }
+      );
+    },
+    { time: BENCH_TIME }
+  );
 });
 
 // ── Multi-file: where Auger's O(1) lookup beats grep's O(n) scan ────────────
@@ -226,15 +250,23 @@ describe(`find symbol by name — ${CORPUS_SIZE} files`, () => {
     rmSync(tmpDir, { recursive: true, force: true });
   });
 
-  bench(`auger — ${N_AUGER}× indexed lookup (O(1) regardless of file count)`, () => {
-    let n = 0;
-    for (let i = 0; i < N_AUGER; i++) n += (findStmt.all("add") as unknown[]).length;
-    return n;
-  }, { time: BENCH_TIME });
+  bench(
+    `auger — ${N_AUGER}× indexed lookup (O(1) regardless of file count)`,
+    () => {
+      let n = 0;
+      for (let i = 0; i < N_AUGER; i++) n += (findStmt.all("add") as unknown[]).length;
+      return n;
+    },
+    { time: BENCH_TIME }
+  );
 
-  bench("grep -r — 1× linear scan across all files (O(n) in file count)", () => {
-    execSync(`grep -rnE "(function|const)\\s+add[\\s(=<]" "${tmpDir}"`, { stdio: "pipe" });
-  }, { time: BENCH_TIME });
+  bench(
+    "grep -r — 1× linear scan across all files (O(n) in file count)",
+    () => {
+      execSync(`grep -rnE "(function|const)\\s+add[\\s(=<]" "${tmpDir}"`, { stdio: "pipe" });
+    },
+    { time: BENCH_TIME }
+  );
 });
 
 // ── Caller tracing: structural — grep has no equivalent ─────────────────────
@@ -264,14 +296,22 @@ describe("trace callers of 'formatName'", () => {
   });
   afterAll(() => db.close());
 
-  bench(`auger — ${N_AUGER}× recursive CTE through call_edges (exact, no false positives)`, () => {
-    let n = 0;
-    for (let i = 0; i < N_AUGER; i++) n += (traceStmt.all("formatName") as unknown[]).length;
-    return n;
-  }, { time: BENCH_TIME });
+  bench(
+    `auger — ${N_AUGER}× recursive CTE through call_edges (exact, no false positives)`,
+    () => {
+      let n = 0;
+      for (let i = 0; i < N_AUGER; i++) n += (traceStmt.all("formatName") as unknown[]).length;
+      return n;
+    },
+    { time: BENCH_TIME }
+  );
 
-  bench("grep — 1× text search for call sites (shallow, no graph, false positives)", () => {
-    // One pass only — cannot follow callers-of-callers, matches comments/strings.
-    execSync(`grep -n "formatName(" "${tsFixture}"`, { stdio: "pipe" });
-  }, { time: BENCH_TIME });
+  bench(
+    "grep — 1× text search for call sites (shallow, no graph, false positives)",
+    () => {
+      // One pass only — cannot follow callers-of-callers, matches comments/strings.
+      execSync(`grep -n "formatName(" "${tsFixture}"`, { stdio: "pipe" });
+    },
+    { time: BENCH_TIME }
+  );
 });

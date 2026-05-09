@@ -68,7 +68,11 @@ export function startWatcher(
       const tracked = db.prepare("SELECT path FROM files").all() as { path: string }[];
       for (const { path } of tracked) {
         if (!existsSync(path)) {
-          try { indexer.removeFile(path); } catch {}
+          try {
+            indexer.removeFile(path);
+          } catch {
+            /* file already gone */
+          }
         }
       }
       resolve();

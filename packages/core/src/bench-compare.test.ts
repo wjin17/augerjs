@@ -22,10 +22,12 @@ const fixtures = resolve(__dirname, "../../../fixtures");
 const tsFixture = `${fixtures}/typescript/sample.ts`;
 
 const AUGER_REPS = 100_000; // per-query repetitions to get stable timing
-const GREP_REPS = 200;      // subprocess reps (each ~3ms)
+const GREP_REPS = 200; // subprocess reps (each ~3ms)
 const CORPUS_SIZE = 20;
 
-function ns(bigint: bigint): number { return Number(bigint); }
+function ns(bigint: bigint): number {
+  return Number(bigint);
+}
 
 function fmt(nsPerOp: number): string {
   if (nsPerOp < 1_000) return `${nsPerOp.toFixed(0)} ns`;
@@ -49,7 +51,7 @@ function time(fn: () => void, reps: number): number {
 
 let db: Database.Database;
 let tmpDir: string;
-let tmpFiles: string[];
+let _tmpFiles: string[];
 
 beforeAll(() => {
   db = openDb(":memory:");
@@ -60,7 +62,7 @@ beforeAll(() => {
   const src = readFileSync(tsFixture, "utf8");
   const multiDb = openDb(":memory:");
   const multiIndexer = new Indexer(multiDb);
-  tmpFiles = Array.from({ length: CORPUS_SIZE }, (_, i) => {
+  _tmpFiles = Array.from({ length: CORPUS_SIZE }, (_, i) => {
     const p = join(tmpDir, `file${i}.ts`);
     writeFileSync(p, src);
     multiIndexer.indexFile(p, "typescript");
@@ -83,14 +85,18 @@ test("find_symbol by name — 1 file", () => {
     "SELECT name, kind, file_path, start_line FROM symbols WHERE name = ? AND is_anonymous = 0"
   );
 
-  const augerNs = time(() => { stmt.all("add"); }, AUGER_REPS);
-  const grepNs  = time(() => {
+  const augerNs = time(() => {
+    stmt.all("add");
+  }, AUGER_REPS);
+  const grepNs = time(() => {
     execSync(`grep -nE "(function|const)\\s+add[\\s(=<]" "${tsFixture}"`, { stdio: "pipe" });
   }, GREP_REPS);
 
   console.log("\n── find_symbol('add') ─────────────────────────────────────");
   console.log(`  auger (pre-indexed)   ${fmt(augerNs).padStart(10)}`);
-  console.log(`  grep  (raw scan)      ${fmt(grepNs).padStart(10)}   (includes fork+exec overhead)`);
+  console.log(
+    `  grep  (raw scan)      ${fmt(grepNs).padStart(10)}   (includes fork+exec overhead)`
+  );
   console.log(`  speedup               ${ratio(augerNs, grepNs).padStart(10)}`);
 });
 
@@ -100,14 +106,18 @@ test("full-text search — 1 file", () => {
      WHERE symbols_fts MATCH ? AND s.is_anonymous = 0 LIMIT 50`
   );
 
-  const augerNs = time(() => { stmt.all("format*"); }, AUGER_REPS);
-  const grepNs  = time(() => {
+  const augerNs = time(() => {
+    stmt.all("format*");
+  }, AUGER_REPS);
+  const grepNs = time(() => {
     execSync(`grep -n "format" "${tsFixture}"`, { stdio: "pipe" });
   }, GREP_REPS);
 
   console.log("\n── search('format') ───────────────────────────────────────");
   console.log(`  auger FTS5 (stemmed)  ${fmt(augerNs).padStart(10)}`);
-  console.log(`  grep  (raw scan)      ${fmt(grepNs).padStart(10)}   (no stemming, no docstring search)`);
+  console.log(
+    `  grep  (raw scan)      ${fmt(grepNs).padStart(10)}   (no stemming, no docstring search)`
+  );
   console.log(`  speedup               ${ratio(augerNs, grepNs).padStart(10)}`);
 });
 
@@ -116,8 +126,10 @@ test("list file symbols — 1 file", () => {
     "SELECT name, kind, signature, file_path, start_line FROM symbols WHERE file_path = ? ORDER BY start_line"
   );
 
-  const augerNs = time(() => { stmt.all(tsFixture); }, AUGER_REPS);
-  const grepNs  = time(() => {
+  const augerNs = time(() => {
+    stmt.all(tsFixture);
+  }, AUGER_REPS);
+  const grepNs = time(() => {
     execSync(
       `grep -nE "^(export )?(async )?(function|class|interface) [A-Za-z_]|^(export )?(const|type) [A-Za-z_]+ =" "${tsFixture}" | awk -F: '{print $1, substr($0, index($0,$2))}'`,
       { stdio: "pipe" }
@@ -125,8 +137,12 @@ test("list file symbols — 1 file", () => {
   }, GREP_REPS);
 
   console.log("\n── get_file_symbols ───────────────────────────────────────");
-  console.log(`  auger (pre-indexed)   ${fmt(augerNs).padStart(10)}   (returns class fields + obj methods too)`);
-  console.log(`  grep+awk (heuristic)  ${fmt(grepNs).padStart(10)}   (misses class fields, obj methods, anon)`);
+  console.log(
+    `  auger (pre-indexed)   ${fmt(augerNs).padStart(10)}   (returns class fields + obj methods too)`
+  );
+  console.log(
+    `  grep+awk (heuristic)  ${fmt(grepNs).padStart(10)}   (misses class fields, obj methods, anon)`
+  );
   console.log(`  speedup               ${ratio(augerNs, grepNs).padStart(10)}`);
 });
 
@@ -136,8 +152,10 @@ test(`find_symbol across ${CORPUS_SIZE} files`, () => {
     "SELECT name, kind, file_path, start_line FROM symbols WHERE name = ? AND is_anonymous = 0"
   );
 
-  const augerNs = time(() => { stmt.all("add"); }, AUGER_REPS);
-  const grepNs  = time(() => {
+  const augerNs = time(() => {
+    stmt.all("add");
+  }, AUGER_REPS);
+  const grepNs = time(() => {
     execSync(`grep -rnE "(function|const)\\s+add[\\s(=<]" "${tmpDir}"`, { stdio: "pipe" });
   }, GREP_REPS);
 
@@ -162,14 +180,20 @@ test("trace callers (call graph vs text search)", () => {
     SELECT DISTINCT id, name, file_path, start_line, depth FROM chain WHERE depth > 0
   `);
 
-  const augerNs = time(() => { stmt.all("formatName"); }, AUGER_REPS);
-  const grepNs  = time(() => {
+  const augerNs = time(() => {
+    stmt.all("formatName");
+  }, AUGER_REPS);
+  const grepNs = time(() => {
     // grep can only find call sites, not traverse the graph transitively
     execSync(`grep -n "formatName(" "${tsFixture}"`, { stdio: "pipe" });
   }, GREP_REPS);
 
   console.log("\n── trace_callers('formatName') ────────────────────────────");
-  console.log(`  auger CTE (exact)     ${fmt(augerNs).padStart(10)}   (transitive, no false positives)`);
-  console.log(`  grep  (1 level only)  ${fmt(grepNs).padStart(10)}   (shallow, matches strings/comments too)`);
+  console.log(
+    `  auger CTE (exact)     ${fmt(augerNs).padStart(10)}   (transitive, no false positives)`
+  );
+  console.log(
+    `  grep  (1 level only)  ${fmt(grepNs).padStart(10)}   (shallow, matches strings/comments too)`
+  );
   console.log(`  speedup               ${ratio(augerNs, grepNs).padStart(10)}`);
 });

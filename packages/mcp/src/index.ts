@@ -21,10 +21,7 @@ const ROOT_PROP = {
 } as const;
 
 export function createMcpServer(getDb: GetDb) {
-  const server = new Server(
-    { name: "auger", version: "0.1.0" },
-    { capabilities: { tools: {} } }
-  );
+  const server = new Server({ name: "auger", version: "0.1.0" }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
@@ -119,11 +116,17 @@ function withLocation<T extends WithLocation>(row: T): T & { location: string } 
   return { ...row, location: `${row.file_path}:${row.start_line}` };
 }
 
-export function handleTool(db: Database.Database, name: string, args: Record<string, unknown>): unknown {
+export function handleTool(
+  db: Database.Database,
+  name: string,
+  args: Record<string, unknown>
+): unknown {
   switch (name) {
     case "find_symbol": {
       const rows = db
-        .prepare("SELECT name, kind, file_path, start_line FROM symbols WHERE name = ? AND is_anonymous = 0")
+        .prepare(
+          "SELECT name, kind, file_path, start_line FROM symbols WHERE name = ? AND is_anonymous = 0"
+        )
         .all(args["name"]) as WithLocation[];
       return { matches: rows.map(withLocation) };
     }
@@ -133,16 +136,20 @@ export function handleTool(db: Database.Database, name: string, args: Record<str
         .all(args["name"]) as (WithLocation & { id: number })[];
       if (syms.length === 0) return { found: false };
       const results = syms.map((sym) => {
-        const callers = (db
-          .prepare(
-            "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.caller_id WHERE e.callee_id = ?"
-          )
-          .all(sym.id) as WithLocation[]).map(withLocation);
-        const callees = (db
-          .prepare(
-            "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.callee_id WHERE e.caller_id = ?"
-          )
-          .all(sym.id) as WithLocation[]).map(withLocation);
+        const callers = (
+          db
+            .prepare(
+              "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.caller_id WHERE e.callee_id = ?"
+            )
+            .all(sym.id) as WithLocation[]
+        ).map(withLocation);
+        const callees = (
+          db
+            .prepare(
+              "SELECT s.name, s.file_path, s.start_line FROM call_edges e JOIN symbols s ON s.id = e.callee_id WHERE e.caller_id = ?"
+            )
+            .all(sym.id) as WithLocation[]
+        ).map(withLocation);
         return { ...withLocation(sym), callers, callees };
       });
       return results.length === 1 ? results[0] : { matches: results };
@@ -167,7 +174,9 @@ export function handleTool(db: Database.Database, name: string, args: Record<str
     }
     case "get_file_symbols": {
       const rows = db
-        .prepare("SELECT name, kind, signature, file_path, start_line, end_line FROM symbols WHERE file_path = ? ORDER BY start_line")
+        .prepare(
+          "SELECT name, kind, signature, file_path, start_line, end_line FROM symbols WHERE file_path = ? ORDER BY start_line"
+        )
         .all(args["path"]) as WithLocation[];
       return { symbols: rows.map(withLocation) };
     }
@@ -214,14 +223,22 @@ function traceGraph(
 
   // Group anonymous entries by depth+file to reduce noise.
   // Named symbols are emitted individually; anonymous ones become summary entries.
-  const anonGroups = new Map<string, { count: number; file_path: string; start_line: number; depth: number }>();
+  const anonGroups = new Map<
+    string,
+    { count: number; file_path: string; start_line: number; depth: number }
+  >();
   const named: ReturnType<typeof withLocation>[] = [];
 
   for (const row of rows) {
     if (row.is_anonymous) {
       const key = `${row.depth}:${row.file_path}`;
       if (!anonGroups.has(key)) {
-        anonGroups.set(key, { count: 0, file_path: row.file_path, start_line: row.start_line, depth: row.depth });
+        anonGroups.set(key, {
+          count: 0,
+          file_path: row.file_path,
+          start_line: row.start_line,
+          depth: row.depth,
+        });
       }
       anonGroups.get(key)!.count++;
     } else {
@@ -238,10 +255,10 @@ function traceGraph(
   }));
 
   const trace = [...named, ...summaries].sort((a, b) => {
-    const da = (a as Record<string, unknown>)["depth"] as number ?? 0;
-    const db_ = (b as Record<string, unknown>)["depth"] as number ?? 0;
-    const na = (a as Record<string, unknown>)["name"] as string ?? "";
-    const nb = (b as Record<string, unknown>)["name"] as string ?? "";
+    const da = ((a as Record<string, unknown>)["depth"] as number) ?? 0;
+    const db_ = ((b as Record<string, unknown>)["depth"] as number) ?? 0;
+    const na = ((a as Record<string, unknown>)["name"] as string) ?? "";
+    const nb = ((b as Record<string, unknown>)["name"] as string) ?? "";
     return da !== db_ ? da - db_ : na.localeCompare(nb);
   });
 
@@ -290,8 +307,14 @@ export async function runMcpHttp(getDb: GetDb, port: number): Promise<void> {
   await new Promise<void>((resolve) => httpServer.listen(port, resolve));
   console.log(`Auger MCP server listening on http://localhost:${port}/mcp`);
 
-  process.on("SIGINT", () => { httpServer.close(); process.exit(0); });
-  process.on("SIGTERM", () => { httpServer.close(); process.exit(0); });
+  process.on("SIGINT", () => {
+    httpServer.close();
+    process.exit(0);
+  });
+  process.on("SIGTERM", () => {
+    httpServer.close();
+    process.exit(0);
+  });
 
   await new Promise<void>(() => {});
 }
