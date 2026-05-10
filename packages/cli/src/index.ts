@@ -68,16 +68,36 @@ program
   .description("Start the MCP stdio server (spawned per-session by Claude Code)")
   .action(async () => {
     const rootDir = findProjectRoot(process.cwd());
+    const dbPath = dbPathForRoot(rootDir);
+    const isWarm = existsSync(dbPath);
+
+    if (!isWarm) {
+      process.stderr.write(`auger: indexing ${rootDir}…\n`);
+    }
+
+    const startTime = Date.now();
     const registry = new ProjectRegistry(rootDir);
 
     // Kick off indexing immediately but don't block — connect the MCP transport
     // right away so Claude Code doesn't time out on the initialize handshake.
     // Tool calls naturally await registry.getDb() until the scan completes.
-    registry.getDb().then(() => {
-      process.stderr.write(`auger: ready (${rootDir})\n`);
-    }).catch((err) => {
-      process.stderr.write(`auger: failed to index ${rootDir}: ${err}\n`);
-    });
+    registry
+      .getDb()
+      .then((db) => {
+        const files = (db.prepare("SELECT COUNT(*) as c FROM files").get() as { c: number }).c;
+        const symbols = (db.prepare("SELECT COUNT(*) as c FROM symbols").get() as { c: number })
+          .c;
+        const counts = `${files.toLocaleString()} files, ${symbols.toLocaleString()} symbols`;
+        if (isWarm) {
+          process.stderr.write(`auger: ready — ${counts} (warm)\n`);
+        } else {
+          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+          process.stderr.write(`auger: ready — ${counts} indexed in ${elapsed}s\n`);
+        }
+      })
+      .catch((err) => {
+        process.stderr.write(`auger: failed to index ${rootDir}: ${err}\n`);
+      });
 
     process.once("SIGINT", () => {
       registry.close();
