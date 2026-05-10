@@ -117,7 +117,8 @@ program
   .command("status")
   .description("Show index status for the current project")
   .option("--json", "machine-readable JSON output")
-  .action((opts) => {
+  .option("-w, --watch", "poll until indexing stabilizes, then exit")
+  .action(async (opts) => {
     const rootDir = findProjectRoot(process.cwd());
     const dbPath = dbPathForRoot(rootDir);
 
@@ -129,6 +130,56 @@ program
           `No index for ${rootDir}.\nOpen this project in Claude Code to build the index.`
         );
       }
+      return;
+    }
+
+    if (opts.watch) {
+      const spinners = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+      let frame = 0;
+      let stableCount = 0;
+      let lastFiles = -1;
+      let lastSymbols = -1;
+
+      const db = openDb(dbPath);
+
+      const render = (done: boolean, files: number, symbols: number) => {
+        const f = files.toLocaleString().padStart(7);
+        const s = symbols.toLocaleString().padStart(8);
+        if (done) {
+          process.stdout.write(`\r✓ ready — ${files.toLocaleString()} files, ${symbols.toLocaleString()} symbols\n`);
+        } else {
+          const spin = spinners[frame % spinners.length]!;
+          process.stdout.write(`\r${spin} indexing ${rootDir}\n  files:   ${f}\n  symbols: ${s}\x1b[2A`);
+          frame++;
+        }
+      };
+
+      await new Promise<void>((resolve) => {
+        const tick = () => {
+          const files = (db.prepare("SELECT COUNT(*) as c FROM files").get() as { c: number }).c;
+          const symbols = (
+            db.prepare("SELECT COUNT(*) as c FROM symbols").get() as { c: number }
+          ).c;
+
+          if (files === lastFiles && symbols === lastSymbols && files > 0) {
+            stableCount++;
+          } else {
+            stableCount = 0;
+          }
+          lastFiles = files;
+          lastSymbols = symbols;
+
+          if (stableCount >= 4) {
+            render(true, files, symbols);
+            db.close();
+            resolve();
+          } else {
+            render(false, files, symbols);
+            setTimeout(tick, 500);
+          }
+        };
+        tick();
+      });
       return;
     }
 
