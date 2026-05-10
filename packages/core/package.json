@@ -4,6 +4,7 @@
   "description": "Core indexing engine for auger — parses TypeScript/Ruby source files into a SQLite symbol index",
   "license": "MIT",
   "repository": { "type": "git", "url": "https://github.com/wjin17/augerjs" },
+  "engines": { "node": ">=18.0.0" },
   "type": "module",
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
