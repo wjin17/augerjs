@@ -21,3 +21,24 @@ jobs:
       - run: bun run typecheck
       - run: bun run lint
       - run: bun run test
+
+  publish:
+    name: Publish to npm
+    needs: ci
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: bun install
+      - name: Publish packages
+        run: |
+          cd packages/core && npm publish --access public
+          cd ../mcp && bun publish --access public
+          cd ../cli && bun publish --access public
+        env:
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          BUN_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
