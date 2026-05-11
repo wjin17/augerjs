@@ -221,6 +221,7 @@ describe("Indexer", () => {
   describe("cross-file resolution — Ruby", () => {
     const formatterFixture = `${fixtures}/ruby/formatter.rb`;
     const personFixture = `${fixtures}/ruby/person.rb`;
+    const autoloadedFixture = `${fixtures}/ruby/autoloaded.rb`;
 
     it("stores wildcard import for require_relative", () => {
       indexer.indexFile(formatterFixture, "ruby");
@@ -256,6 +257,20 @@ describe("Indexer", () => {
         .prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'titleize'")
         .get() as { callee_id: number | null } | undefined;
       expect(after?.callee_id).not.toBeNull();
+    });
+
+    it("resolves callee via global Ruby fallback (Rails autoloading, no require)", () => {
+      indexer.indexFile(formatterFixture, "ruby");
+      indexer.indexFile(autoloadedFixture, "ruby");
+      const titleizeSym = db
+        .prepare("SELECT id FROM symbols WHERE name = 'titleize'")
+        .get() as { id: number };
+      const edge = db
+        .prepare(
+          "SELECT callee_id FROM call_edges WHERE callee_name = 'titleize' AND caller_id IN (SELECT id FROM symbols WHERE file_path = ?)"
+        )
+        .get(autoloadedFixture) as { callee_id: number | null } | undefined;
+      expect(edge?.callee_id).toBe(titleizeSym.id);
     });
   });
 

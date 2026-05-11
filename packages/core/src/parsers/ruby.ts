@@ -5,6 +5,8 @@ import { existsSync, readFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import type { ExtractedFile, ExtractedSymbol, ImportEntry } from "./typescript.js";
 
+const REQUIRE_METHODS = new Set(["require_relative", "require"]);
+
 // TODO(rails): When manifest.languages includes { ruby: { rails: true } },
 // also parse config/routes.rb for routes, scan ApplicationRecord subclasses
 // for has_many/belongs_to associations, and tag controller actions

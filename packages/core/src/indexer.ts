@@ -125,6 +125,25 @@ export class Indexer {
         )
         WHERE callee_id IS NULL
       `);
+
+      // Pass 4: global Ruby name resolution (Rails autoloading — no explicit require)
+      this.db.exec(`
+        UPDATE call_edges
+        SET callee_id = (
+          SELECT s.id FROM symbols s
+          JOIN files f ON f.path = s.file_path
+          WHERE s.name = call_edges.callee_name
+          AND s.is_anonymous = 0
+          AND f.language = 'ruby'
+          LIMIT 1
+        )
+        WHERE callee_id IS NULL
+        AND caller_id IN (
+          SELECT s.id FROM symbols s
+          JOIN files f ON f.path = s.file_path
+          WHERE f.language = 'ruby'
+        )
+      `);
     });
 
     tx();
