@@ -18,6 +18,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # auger local output
 .auger-local/
 
+# claude code internals
+.claude/
+
 # dotenv environment variable files
 .env
 .env.development.local
