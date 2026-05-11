@@ -1,0 +1,13 @@
+require_relative './formatter'
+
+class Person
+  attr_accessor :name
+
+  def initialize(name)
+    @name = name
+  end
+
+  def greeting
+    Formatter.titleize(@name)
+  end
+end

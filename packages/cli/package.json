@@ -1,14 +1,31 @@
 {
   "name": "@augerjs/cli",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "Live codebase index for LLMs — indexes TypeScript and Ruby into SQLite and serves it as an MCP server",
   "license": "MIT",
-  "repository": { "type": "git", "url": "https://github.com/wjin17/augerjs" },
-  "engines": { "node": ">=18.0.0" },
-  "keywords": ["mcp", "claude", "llm", "codebase", "index", "typescript", "symbol"],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wjin17/augerjs"
+  },
+  "engines": {
+    "node": ">=18.0.0"
+  },
+  "keywords": [
+    "mcp",
+    "claude",
+    "llm",
+    "codebase",
+    "index",
+    "typescript",
+    "symbol"
+  ],
   "type": "module",
-  "bin": { "auger": "./dist/index.js" },
-  "files": ["dist"],
+  "bin": {
+    "auger": "./dist/index.js"
+  },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc && chmod +x dist/index.js",
     "typecheck": "tsc --noEmit",

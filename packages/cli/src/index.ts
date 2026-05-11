@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 import { Command } from "commander";
-import { existsSync, readFileSync, writeFileSync } from "node:fs";
+import { createInterface } from "node:readline";
+import { existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from "node:fs";
 import { homedir } from "node:os";
-import { join, resolve } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { findProjectRoot, dbPathForRoot, openDb, ProjectRegistry } from "@augerjs/core";
 import { runMcpStdio, handleTool } from "@augerjs/mcp";
 
@@ -14,6 +15,64 @@ program.name("auger").description("Live codebase index for LLMs").version("0.1.0
 // npx so no global install is required — works for both developer and agent installs.
 const MCP_ENTRY = { command: "npx", args: ["-y", "@augerjs/cli", "start"] };
 
+type ClientDef = {
+  name: string;
+  configPath: string;
+  detectionPath: string | null; // null = always shown
+  format: "mcpServers" | "zed";
+};
+
+function buildClientList(): ClientDef[] {
+  const home = homedir();
+  const plat = process.platform;
+
+  const claudeDesktopDir =
+    plat === "win32"
+      ? join(process.env["APPDATA"] ?? join(home, "AppData", "Roaming"), "Claude")
+      : plat === "darwin"
+        ? join(home, "Library", "Application Support", "Claude")
+        : join(home, ".config", "Claude");
+
+  return [
+    {
+      name: "Claude Code — this project",
+      configPath: resolve(".mcp.json"),
+      detectionPath: null,
+      format: "mcpServers",
+    },
+    {
+      name: "Claude Code — all projects",
+      configPath: join(home, ".mcp.json"),
+      detectionPath: null,
+      format: "mcpServers",
+    },
+    {
+      name: "Claude Desktop",
+      configPath: join(claudeDesktopDir, "claude_desktop_config.json"),
+      detectionPath: claudeDesktopDir,
+      format: "mcpServers",
+    },
+    {
+      name: "Cursor",
+      configPath: join(home, ".cursor", "mcp.json"),
+      detectionPath: join(home, ".cursor"),
+      format: "mcpServers",
+    },
+    {
+      name: "Windsurf",
+      configPath: join(home, ".codeium", "windsurf", "mcp_config.json"),
+      detectionPath: join(home, ".codeium", "windsurf"),
+      format: "mcpServers",
+    },
+    {
+      name: "Zed",
+      configPath: join(home, ".config", "zed", "settings.json"),
+      detectionPath: join(home, ".config", "zed"),
+      format: "zed",
+    },
+  ];
+}
+
 function readMcpConfig(mcpPath: string): Record<string, unknown> {
   if (!existsSync(mcpPath)) return { mcpServers: {} };
   try {
@@ -23,42 +82,112 @@ function readMcpConfig(mcpPath: string): Record<string, unknown> {
   }
 }
 
-function writeMcpEntry(mcpPath: string): "added" | "exists" {
-  const config = readMcpConfig(mcpPath);
+function writeMcpEntry(configPath: string): "added" | "exists" {
+  const config = readMcpConfig(configPath);
   const servers = (config.mcpServers ?? {}) as Record<string, unknown>;
   if (servers["auger"]) return "exists";
   servers["auger"] = MCP_ENTRY;
   config.mcpServers = servers;
-  writeFileSync(mcpPath, JSON.stringify(config, null, 2) + "\n");
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
   return "added";
+}
+
+function writeZedEntry(configPath: string): "added" | "exists" {
+  let config: Record<string, unknown> = {};
+  if (existsSync(configPath)) {
+    try {
+      config = JSON.parse(readFileSync(configPath, "utf8"));
+    } catch {
+      /* leave empty */
+    }
+  }
+  const servers = (config["context_servers"] ?? {}) as Record<string, unknown>;
+  if (servers["auger"]) return "exists";
+  servers["auger"] = { command: { path: "npx", args: ["-y", "@augerjs/cli", "start"] }, settings: {} };
+  config["context_servers"] = servers;
+  mkdirSync(dirname(configPath), { recursive: true });
+  writeFileSync(configPath, JSON.stringify(config, null, 2) + "\n");
+  return "added";
+}
+
+function writeClientEntry(client: ClientDef): "added" | "exists" {
+  return client.format === "zed" ? writeZedEntry(client.configPath) : writeMcpEntry(client.configPath);
+}
+
+async function promptLine(question: string): Promise<string> {
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  return new Promise((resolve) => {
+    rl.question(question, (answer) => {
+      rl.close();
+      resolve(answer.trim());
+    });
+  });
 }
 
 program
   .command("init")
-  .description("Wire auger into Claude Code (.mcp.json). Safe to re-run.")
-  .option("-g, --global", "add to ~/.mcp.json — works for every repo, no per-project setup")
-  .action((opts) => {
-    const mcpPath = opts.global ? join(homedir(), ".mcp.json") : resolve(".mcp.json");
-    const result = writeMcpEntry(mcpPath);
-
-    if (result === "exists") {
-      console.log(`auger already configured in ${mcpPath}`);
-    } else {
-      console.log(`Added auger to ${mcpPath}`);
-    }
-
+  .description("Configure auger in one or more MCP clients. Safe to re-run.")
+  .option("-g, --global", "add to ~/.mcp.json without prompting (Claude Code, all projects)")
+  .action(async (opts) => {
     if (opts.global) {
+      const configPath = join(homedir(), ".mcp.json");
+      const result = writeMcpEntry(configPath);
       console.log(
-        "\nAuger will auto-detect and index any project you open in Claude Code." +
-          "\nRestart Claude Code to activate." +
-          "\n\nOptional: add .auger.yml to a project to customise include/exclude patterns."
+        result === "exists" ? `auger already configured in ${configPath}` : `Added auger to ${configPath}`
       );
-    } else {
       console.log("\nRestart Claude Code to activate.");
-      if (!existsSync(".auger.yml")) {
-        console.log("Optional: create .auger.yml to customise include/exclude patterns.");
-      }
+      return;
     }
+
+    const all = buildClientList();
+    const detected = all.filter((c) => c.detectionPath === null || existsSync(c.detectionPath));
+
+    if (!process.stdin.isTTY) {
+      // Non-interactive fallback: write local .mcp.json
+      const result = writeMcpEntry(resolve(".mcp.json"));
+      console.log(result === "exists" ? "auger already configured in .mcp.json" : "Added auger to .mcp.json");
+      return;
+    }
+
+    console.log("Detected MCP clients:\n");
+    detected.forEach((c, i) => {
+      console.log(`  ${i + 1}. ${c.name}`);
+      console.log(`     ${c.configPath}`);
+    });
+    console.log();
+
+    const answer = await promptLine(`Configure which? (e.g. "1 2", "all", blank to cancel): `);
+    if (!answer) {
+      console.log("Cancelled.");
+      return;
+    }
+
+    let selected: ClientDef[];
+    if (answer.toLowerCase() === "all") {
+      selected = detected;
+    } else {
+      const indices = answer
+        .split(/[\s,]+/)
+        .map((n) => parseInt(n, 10) - 1)
+        .filter((n) => n >= 0 && n < detected.length);
+      if (indices.length === 0) {
+        console.log("No valid selection. Cancelled.");
+        return;
+      }
+      selected = indices.map((i) => detected[i]!);
+    }
+
+    console.log();
+    for (const client of selected) {
+      const result = writeClientEntry(client);
+      console.log(
+        result === "exists"
+          ? `  ✓ ${client.name} — already configured`
+          : `  ✓ ${client.name} — added`
+      );
+    }
+    console.log("\nRestart your MCP client(s) to activate.");
   });
 
 // ── start ───────────────────────────────────────────────────────────────────
@@ -108,7 +237,28 @@ program
       process.exit(0);
     });
 
-    await runMcpStdio((root?) => registry.getDb(root));
+    await runMcpStdio(
+      (root?) => registry.getDb(root),
+      (root?) => registry.getStatus(root),
+      (root?) => registry.reindexProject(root)
+    );
+  });
+
+// ── reindex ─────────────────────────────────────────────────────────────────
+
+program
+  .command("reindex")
+  .description("Clear the index and rebuild from scratch on next start")
+  .option("-r, --root <path>", "path inside the target project (default: cwd)")
+  .action((opts) => {
+    const rootDir = opts.root ? findProjectRoot(opts.root) : findProjectRoot(process.cwd());
+    const dbPath = dbPathForRoot(rootDir);
+    if (!existsSync(dbPath)) {
+      console.log(`No index for ${rootDir}.`);
+      return;
+    }
+    unlinkSync(dbPath);
+    console.log(`Cleared index for ${rootDir}.\nRestart your MCP client to rebuild.`);
   });
 
 // ── status ──────────────────────────────────────────────────────────────────

@@ -128,6 +128,22 @@ describe("typescript parser", () => {
     }
   });
 
+  it("extracts enum as kind=type", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const sym = result.symbols.find((s) => s.name === "Direction");
+    expect(sym?.kind).toBe("type");
+    expect(sym?.isAnonymous).toBe(false);
+  });
+
+  it("extracts enum members as kind=constant with parentName", () => {
+    const project = new Project({ useInMemoryFileSystem: false });
+    const result = parseTypeScriptFile(fixture, project);
+    const sym = result.symbols.find((s) => s.name === "Up");
+    expect(sym?.kind).toBe("constant");
+    expect(sym?.parentName).toBe("Direction");
+  });
+
   it("sets parentName on anonymous callbacks to their enclosing function", () => {
     const project = new Project({ useInMemoryFileSystem: false });
     const result = parseTypeScriptFile(fixture, project);

@@ -10,6 +10,8 @@ import type Database from "better-sqlite3";
 // For file-based tools the DB is derived from the file path; for name-based
 // tools the caller may pass an explicit `root` (any path inside the project).
 export type GetDb = (root?: string) => Promise<Database.Database>;
+export type GetStatus = (root?: string) => { db: Database.Database; isReady: boolean } | null;
+export type Reindex = (root?: string) => Promise<void>;
 
 const ROOT_PROP = {
   root: {
@@ -20,7 +22,7 @@ const ROOT_PROP = {
   },
 } as const;
 
-export function createMcpServer(getDb: GetDb) {
+export function createMcpServer(getDb: GetDb, getStatus: GetStatus, reindex?: Reindex) {
   const server = new Server({ name: "auger", version: "0.1.0" }, { capabilities: { tools: {} } });
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
@@ -85,6 +87,24 @@ export function createMcpServer(getDb: GetDb) {
           required: ["path"],
         },
       },
+      {
+        name: "indexing_status",
+        description:
+          "Check whether the auger index has finished building and how many files and symbols are indexed so far. Call this if other tools return no results or you suspect the index is still warming up.",
+        inputSchema: {
+          type: "object",
+          properties: { ...ROOT_PROP },
+        },
+      },
+      {
+        name: "reindex",
+        description:
+          "Drop and rebuild the symbol index for a project from scratch. Use this if the index appears stale or other tools are returning empty results after an update to auger.",
+        inputSchema: {
+          type: "object",
+          properties: { ...ROOT_PROP },
+        },
+      },
     ],
   }));
 
@@ -100,6 +120,25 @@ export function createMcpServer(getDb: GetDb) {
       root = dirname(a["path"]);
     } else if (typeof a["root"] === "string") {
       root = a["root"];
+    }
+
+    if (name === "reindex") {
+      if (reindex) {
+        reindex(root).catch(() => {});
+      }
+      return { content: [{ type: "text", text: JSON.stringify({ ok: true, message: "Reindex started — use indexing_status to check progress." }) }] };
+    }
+
+    if (name === "indexing_status") {
+      const status = getStatus(root);
+      if (!status) {
+        return { content: [{ type: "text", text: JSON.stringify({ isReady: false, files: 0, symbols: 0, message: "Index not started yet." }) }] };
+      }
+      const { db, isReady } = status;
+      const files = (db.prepare("SELECT COUNT(*) as n FROM files").get() as { n: number }).n;
+      const symbols = (db.prepare("SELECT COUNT(*) as n FROM symbols WHERE is_anonymous = 0").get() as { n: number }).n;
+      const message = isReady ? "Index ready." : "Index is still building — results from other tools may be incomplete.";
+      return { content: [{ type: "text", text: JSON.stringify({ isReady, files, symbols, message }) }] };
     }
 
     const db = await getDb(root);
@@ -265,8 +304,8 @@ function traceGraph(
   return { trace };
 }
 
-export async function runMcpStdio(getDb: GetDb) {
-  const server = createMcpServer(getDb);
+export async function runMcpStdio(getDb: GetDb, getStatus: GetStatus, reindex?: Reindex) {
+  const server = createMcpServer(getDb, getStatus, reindex);
   const transport = new StdioServerTransport();
   await server.connect(transport);
 }
@@ -286,8 +325,8 @@ async function readJsonBody(req: IncomingMessage): Promise<unknown> {
   });
 }
 
-export async function runMcpHttp(getDb: GetDb, port: number): Promise<void> {
-  const server = createMcpServer(getDb);
+export async function runMcpHttp(getDb: GetDb, getStatus: GetStatus, reindex: Reindex | undefined, port: number): Promise<void> {
+  const server = createMcpServer(getDb, getStatus, reindex);
   const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
   await server.connect(transport);
 

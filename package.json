@@ -13,9 +13,13 @@
     "typecheck": "bun run --filter '*' typecheck",
     "lint": "eslint packages/*/src",
     "format": "prettier --write packages/*/src",
-    "format:check": "prettier --check packages/*/src"
+    "format:check": "prettier --check packages/*/src",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:publish": "changeset publish"
   },
   "devDependencies": {
+    "@changesets/cli": "^2.31.0",
     "@eslint/js": "^10.0.1",
     "@types/node": "^20.0.0",
     "eslint": "9",

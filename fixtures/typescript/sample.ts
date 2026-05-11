@@ -27,6 +27,13 @@ export interface User {
 
 export type UserId = User["id"];
 
+export enum Direction {
+  Up,
+  Down,
+  Left,
+  Right,
+}
+
 /** Doubles a number. */
 export const double = (n: number): number => n * 2;
 

@@ -132,6 +132,34 @@ export function parseTypeScriptFile(filePath: string, project: Project): Extract
     });
   }
 
+  for (const enumDecl of sf.getEnums()) {
+    const enumName = enumDecl.getName();
+    symbols.push({
+      name: enumName,
+      kind: "type",
+      signature: `enum ${enumName}`,
+      docstring: getJsDoc(enumDecl),
+      startLine: enumDecl.getStartLineNumber(),
+      endLine: enumDecl.getEndLineNumber(),
+      parentName: null,
+      callees: [],
+      isAnonymous: false,
+    });
+    for (const member of enumDecl.getMembers()) {
+      symbols.push({
+        name: member.getName(),
+        kind: "constant",
+        signature: `${enumName}.${member.getName()}`,
+        docstring: null,
+        startLine: member.getStartLineNumber(),
+        endLine: member.getEndLineNumber(),
+        parentName: enumName,
+        callees: [],
+        isAnonymous: false,
+      });
+    }
+  }
+
   for (const varStmt of sf.getVariableStatements()) {
     for (const decl of varStmt.getDeclarations()) {
       if (decl.getNameNode().getKind() !== SyntaxKind.Identifier) continue;

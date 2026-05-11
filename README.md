@@ -19,22 +19,50 @@ Indexes on save. Works across multiple repos in a single session. No config file
 ## Install
 
 ```sh
+npx @augerjs/cli init
+```
+
+Auger detects which MCP clients you have installed and asks which ones to configure:
+
+```
+Detected MCP clients:
+
+  1. Claude Code — this project
+     /your/project/.mcp.json
+  2. Claude Code — all projects
+     ~/.mcp.json
+  3. Cursor
+     ~/.cursor/mcp.json
+
+Configure which? (e.g. "1 2", "all", blank to cancel):
+```
+
+Restart the selected client(s) to activate.
+
+For a non-interactive install (all projects, Claude Code only):
+
+```sh
 npx @augerjs/cli init --global
 ```
 
-That's it. Restart Claude Code. Auger auto-detects and indexes any project you open.
+## Supported clients
 
-For a per-project install (committed alongside the code):
+| Client | Config written |
+|---|---|
+| Claude Code (per-project) | `.mcp.json` |
+| Claude Code (global) | `~/.mcp.json` |
+| Claude Desktop | `~/Library/Application Support/Claude/claude_desktop_config.json` |
+| Cursor | `~/.cursor/mcp.json` |
+| Windsurf | `~/.codeium/windsurf/mcp_config.json` |
+| Zed | `~/.config/zed/settings.json` |
 
-```sh
-npx @augerjs/cli init
-```
+`init` detects which clients are installed and only shows those.
 
 ---
 
 ## How it works
 
-On each Claude Code session, `auger start` is spawned automatically via `.mcp.json`. It:
+On each session, `auger start` is spawned automatically via the client's MCP config. It:
 
 1. Detects the project root by walking up from `cwd` looking for `package.json`, `.git`, `go.mod`, `Gemfile`, etc. — no config file needed.
 2. Opens (or creates) a local SQLite index at `~/.auger/<hash>/index.db`.
@@ -79,7 +107,7 @@ npx @augerjs/cli <command>
 
 | Command | Description |
 |---|---|
-| `init [--global]` | Write auger entry to `.mcp.json` (local) or `~/.mcp.json` (global) |
+| `init [--global]` | Detect installed MCP clients and configure selected ones interactively; `--global` skips the prompt and writes `~/.mcp.json` |
 | `start` | Start the MCP server — called automatically by Claude Code |
 | `status [--json]` | Show indexed file and symbol counts |
 | `doctor` | Check MCP config and index health, exits 1 if misconfigured |
@@ -149,11 +177,9 @@ Warm startup (already indexed, files unchanged): < 1 second regardless of repo s
 
 ---
 
-## Known limitations (v0.1)
+## Known limitations
 
-**Call graph is intra-file only.** `trace_callers` and `trace_callees` only traverse edges within the same file. Cross-file resolution (following imports and re-exports) is planned for 0.2.
-
-**Ruby coverage is basic.** Rails-aware extraction (routes, associations, controller actions) is not implemented. Planned for 0.2.
+**Ruby coverage is basic.** Rails-aware extraction (routes, associations, controller actions) is not yet implemented.
 
 ---
 
@@ -166,3 +192,27 @@ bun run test
 bun run typecheck
 bun run bench:compare   # Auger vs grep performance numbers
 ```
+
+## Releases
+
+This repo uses [Changesets](https://github.com/changesets/changesets). All three packages version together.
+
+**While working on a change worth releasing:**
+
+```sh
+bun run changeset
+# Follow the prompts: pick patch / minor / major, describe what changed
+# This writes a file to .changeset/ — commit it with your code
+```
+
+**When ready to cut a release:**
+
+```sh
+bun run changeset:version   # Bumps all package versions, updates CHANGELOG.md
+git add -A
+git commit -m "chore: version packages"
+git tag v<new-version>
+git push origin main --tags  # Triggers CD — publishes all three packages to npm
+```
+
+Use **patch** for bug fixes, **minor** for new features, **major** for breaking changes.

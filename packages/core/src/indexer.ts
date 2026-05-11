@@ -111,6 +111,20 @@ export class Indexer {
         )
         WHERE callee_id IS NULL
       `);
+
+      // Pass 3: wildcard cross-file resolution (Ruby require_relative)
+      this.db.exec(`
+        UPDATE call_edges
+        SET callee_id = (
+          SELECT s.id FROM symbols s
+          JOIN imports i ON i.source_path = s.file_path AND i.exported_name = '*'
+          WHERE i.file_path = (SELECT s2.file_path FROM symbols s2 WHERE s2.id = call_edges.caller_id)
+          AND s.name = call_edges.callee_name
+          AND s.is_anonymous = 0
+          LIMIT 1
+        )
+        WHERE callee_id IS NULL
+      `);
     });
 
     tx();

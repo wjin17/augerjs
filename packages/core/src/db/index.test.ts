@@ -1,5 +1,9 @@
-import { describe, it, expect, afterEach } from "vitest";
+import { describe, it, expect, afterEach, vi } from "vitest";
 import { openDb } from "./index";
+import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { join } from "node:path";
+import { tmpdir } from "node:os";
+import BetterSqlite3 from "better-sqlite3";
 import type Database from "better-sqlite3";
 
 describe("openDb", () => {
@@ -61,6 +65,46 @@ describe("openDb", () => {
 
     const rows = db.prepare("SELECT name FROM symbols_fts WHERE symbols_fts MATCH 'myFn'").all();
     expect(rows).toHaveLength(1);
+  });
+
+  it("sets user_version on a new on-disk DB", () => {
+    const dir = mkdtempSync(join(tmpdir(), "auger-test-"));
+    const dbPath = join(dir, "test.db");
+    try {
+      const db = openDb(dbPath);
+      const v = db.pragma("user_version", { simple: true }) as number;
+      db.close();
+      expect(v).toBe(1);
+    } finally {
+      rmSync(dir, { recursive: true });
+    }
+  });
+
+  it("wipes and recreates a DB with stale schema version", () => {
+    vi.spyOn(process.stderr, "write").mockImplementation(() => true);
+    const dir = mkdtempSync(join(tmpdir(), "auger-test-"));
+    const dbPath = join(dir, "test.db");
+    try {
+      // Create a DB with wrong version and some data
+      const stale = new BetterSqlite3(dbPath);
+      stale.pragma("user_version = 99");
+      stale.exec("CREATE TABLE old_table (id INTEGER PRIMARY KEY)");
+      stale.close();
+
+      const db = openDb(dbPath);
+      const v = db.pragma("user_version", { simple: true }) as number;
+      const tables = (
+        db.prepare("SELECT name FROM sqlite_master WHERE type='table'").all() as { name: string }[]
+      ).map((r) => r.name);
+      db.close();
+
+      expect(v).toBe(1);
+      expect(tables).not.toContain("old_table");
+      expect(tables).toContain("symbols");
+    } finally {
+      vi.restoreAllMocks();
+      rmSync(dir, { recursive: true });
+    }
   });
 
   it("FTS trigger removes symbols on delete", () => {

@@ -169,7 +169,12 @@ describe("MCP tools", () => {
       const names = result.symbols.map((s: any) => s.name).sort();
       const namedNames = names.filter((n: string) => !n.startsWith("<anonymous"));
       expect(namedNames).toEqual([
+        "Direction",
+        "Down",
         "Greeter",
+        "Left",
+        "Right",
+        "Up",
         "User",
         "UserId",
         "add",

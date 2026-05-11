@@ -33,7 +33,12 @@ describe("Indexer", () => {
         .map((r) => r.name)
         .sort();
       expect(names).toEqual([
+        "Direction",
+        "Down",
         "Greeter",
+        "Left",
+        "Right",
+        "Up",
         "User",
         "UserId",
         "add",
@@ -98,7 +103,7 @@ describe("Indexer", () => {
       const names = (db.prepare("SELECT name FROM symbols").all() as { name: string }[]).map(
         (r) => r.name
       );
-      expect(names).toContain("Greeter");
+      expect(names).toContain("Person");
       expect(names).toContain("greet");
       expect(names).toContain("format_name");
     });
@@ -121,7 +126,7 @@ describe("Indexer", () => {
           c: number;
         }
       ).c;
-      expect(named).toBe(14);
+      expect(named).toBe(19);
     });
   });
 
@@ -210,6 +215,47 @@ describe("Indexer", () => {
         }
       ).c;
       expect(count).toBe(2);
+    });
+  });
+
+  describe("cross-file resolution — Ruby", () => {
+    const formatterFixture = `${fixtures}/ruby/formatter.rb`;
+    const personFixture = `${fixtures}/ruby/person.rb`;
+
+    it("stores wildcard import for require_relative", () => {
+      indexer.indexFile(formatterFixture, "ruby");
+      indexer.indexFile(personFixture, "ruby");
+      const row = db
+        .prepare("SELECT exported_name, source_path FROM imports WHERE file_path = ?")
+        .get(personFixture) as { exported_name: string; source_path: string } | undefined;
+      expect(row?.exported_name).toBe("*");
+      expect(row?.source_path).toBe(formatterFixture);
+    });
+
+    it("resolves cross-file callee via require_relative", () => {
+      indexer.indexFile(formatterFixture, "ruby");
+      indexer.indexFile(personFixture, "ruby");
+      const titleizeSym = db
+        .prepare("SELECT id FROM symbols WHERE name = 'titleize'")
+        .get() as { id: number };
+      const edge = db
+        .prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'titleize'")
+        .get() as { callee_id: number | null } | undefined;
+      expect(edge?.callee_id).toBe(titleizeSym.id);
+    });
+
+    it("resolves retroactively when callee file is indexed after caller", () => {
+      indexer.indexFile(personFixture, "ruby");
+      const before = db
+        .prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'titleize'")
+        .get() as { callee_id: number | null } | undefined;
+      expect(before?.callee_id).toBeNull();
+
+      indexer.indexFile(formatterFixture, "ruby");
+      const after = db
+        .prepare("SELECT callee_id FROM call_edges WHERE callee_name = 'titleize'")
+        .get() as { callee_id: number | null } | undefined;
+      expect(after?.callee_id).not.toBeNull();
     });
   });
 

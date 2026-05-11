@@ -29,16 +29,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
       - uses: actions/setup-node@v4
         with:
           node-version: 20
       - run: bun install
       - name: Publish packages
-        run: |
-          cd packages/core && npm publish --access public
-          cd ../mcp && bun publish --access public
-          cd ../cli && bun publish --access public
+        run: bunx changeset publish
         env:
           NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          BUN_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

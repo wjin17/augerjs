@@ -11,6 +11,7 @@ interface ProjectContext {
   db: Database.Database;
   watcher: FSWatcher;
   ready: Promise<void>;
+  isReady: boolean;
 }
 
 export class ProjectRegistry {
@@ -41,6 +42,12 @@ export class ProjectRegistry {
     return findProjectRoot(dir);
   }
 
+  async reindexProject(root?: string): Promise<void> {
+    const projectRoot = root ? findProjectRoot(root) : this.startupRoot;
+    this.closeProject(projectRoot);
+    await this.getDb(projectRoot);
+  }
+
   closeProject(root: string) {
     const ctx = this.projects.get(root);
     if (!ctx) return;
@@ -57,11 +64,20 @@ export class ProjectRegistry {
     this.projects.clear();
   }
 
+  getStatus(root?: string): { db: Database.Database; isReady: boolean } | null {
+    const projectRoot = root ? findProjectRoot(root) : this.startupRoot;
+    const ctx = this.projects.get(projectRoot);
+    if (!ctx) return null;
+    return { db: ctx.db, isReady: ctx.isReady };
+  }
+
   private openProject(rootDir: string) {
     const manifest = resolveManifest(rootDir);
     const db = openDb(dbPathForRoot(rootDir));
     const indexer = new Indexer(db);
     const { watcher, ready } = startWatcher(manifest, rootDir, db, indexer);
-    this.projects.set(rootDir, { db, watcher, ready });
+    const ctx: ProjectContext = { db, watcher, ready, isReady: false };
+    this.projects.set(rootDir, ctx);
+    ready.then(() => { ctx.isReady = true; });
   }
 }
