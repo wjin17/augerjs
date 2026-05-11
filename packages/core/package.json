@@ -1,6 +1,6 @@
 {
   "name": "@augerjs/core",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Core indexing engine for auger — parses TypeScript/Ruby source files into a SQLite symbol index",
   "license": "MIT",
   "repository": {
