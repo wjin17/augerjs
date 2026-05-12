@@ -10,12 +10,16 @@ const __dirname = dirname(fileURLToPath(import.meta.url));
 // openDb will wipe and recreate any on-disk DB whose version doesn't match.
 const SCHEMA_VERSION = 1;
 
-function wipeDb(dbPath: string, reason: string) {
-  process.stderr.write(`auger: ${reason}, rebuilding index…\n`);
+export function deleteDbFiles(dbPath: string) {
   for (const suffix of ["", "-wal", "-shm"]) {
     const f = dbPath + suffix;
     if (existsSync(f)) unlinkSync(f);
   }
+}
+
+function wipeDb(dbPath: string, reason: string) {
+  process.stderr.write(`auger: ${reason}, rebuilding index…\n`);
+  deleteDbFiles(dbPath);
 }
 
 export function openDb(dbPath: string): Database.Database {
