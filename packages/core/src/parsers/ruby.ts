@@ -20,7 +20,7 @@ const ATTR_METHODS = new Set(["attr_reader", "attr_writer", "attr_accessor"]);
 export function parseRubyFile(filePath: string): ExtractedFile {
   const content = readFileSync(filePath, "utf8");
   const hash = createHash("sha256").update(content).digest("hex");
-  const tree = parser.parse(content);
+  const tree = parser.parse(content, undefined, { bufferSize: Buffer.byteLength(content) + 4 });
   const symbols: ExtractedSymbol[] = [];
 
   walk(tree.rootNode, null, content, symbols);
