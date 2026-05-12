@@ -1,6 +1,6 @@
 {
   "name": "@augerjs/cli",
-  "version": "0.4.0",
+  "version": "0.5.0",
   "description": "Live codebase index for LLMs — indexes TypeScript and Ruby into SQLite and serves it as an MCP server",
   "license": "MIT",
   "repository": {
