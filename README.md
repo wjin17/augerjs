@@ -86,6 +86,8 @@ All tools accept an optional `root` parameter — any path inside the target pro
 | `trace_callees` | `name` | `root`, `max_depth` | Recursive downstream call graph |
 | `search` | `query` | `root` | Full-text search across names, signatures, and docstrings |
 | `get_file_symbols` | `path` | — | All symbols in a file (auto-routes to the right project) |
+| `indexing_status` | — | `root` | Check whether the index has finished building and how many files/symbols are indexed so far |
+| `reindex` | — | `root` | Drop and rebuild the index from scratch |
 
 All results include a `location` field in `file:line` format.
 
@@ -109,7 +111,8 @@ npx @augerjs/cli <command>
 |---|---|
 | `init [--global]` | Detect installed MCP clients and configure selected ones interactively; `--global` skips the prompt and writes `~/.mcp.json` |
 | `start` | Start the MCP server — called automatically by Claude Code |
-| `status [--json]` | Show indexed file and symbol counts |
+| `status [--watch] [--json]` | Show indexed file and symbol counts; `--watch` polls until indexing stabilizes |
+| `reindex [-r <path>]` | Clear the index so it rebuilds fresh on next start |
 | `doctor` | Check MCP config and index health, exits 1 if misconfigured |
 | `find_symbol <name> [-r <path>]` | Locate a symbol |
 | `get_symbol <name> [-r <path>]` | Full symbol record |
@@ -145,19 +148,14 @@ watch:
 
 ## Performance
 
-Benchmarked against a 20-file TypeScript corpus. Grep timings include fork + exec overhead.
+Benchmarked on a synthetic corpus of 500 files, 1 warm-up + 5 measured runs.
 
-| Operation | Auger | grep | Speedup |
-|---|---|---|---|
-| Find symbol by name | 1.4 µs | 8.3 ms | ~6000× |
-| Full-text search | 6.9 µs | 9.0 ms | ~1300× |
-| List file symbols | 27 µs | 3.4 ms | ~130× |
-| Find across 20 files | 16 µs | 3.1 ms | ~190× |
-| Trace callers (recursive) | 9.7 µs | 3.0 ms\* | ~300× |
+| Language | Median | ms/file |
+|---|---|---|
+| Ruby | ~1.0 s | ~2.0 ms |
+| TypeScript | ~1.2 s | ~2.4 ms |
 
-\* grep can only match call sites one level deep — it cannot traverse the graph transitively.
-
-Warm startup (already indexed, files unchanged): < 1 second regardless of repo size, thanks to mtime fast-path.
+Warm startup (already indexed, files unchanged): < 1 second regardless of repo size, thanks to the mtime fast-path.
 
 ---
 
@@ -173,7 +171,8 @@ Warm startup (already indexed, files unchanged): < 1 second regardless of repo s
 
 **Ruby**
 - Classes and modules
-- Instance and class methods
+- Instance methods, class methods (`def self.method`), and `attr_reader`/`attr_writer`/`attr_accessor` (as synthetic methods)
+- Call graph edges, with cross-file resolution including Rails-style autoloading (no explicit `require` needed)
 
 ---
 
@@ -190,7 +189,8 @@ bun install
 bun run build
 bun run test
 bun run typecheck
-bun run bench:compare   # Auger vs grep performance numbers
+node packages/core/bench-index.mjs      # sequential vs parallel indexing (600 files)
+node packages/core/bench-crossover.mjs  # find the crossover point for your machine
 ```
 
 ## Releases
