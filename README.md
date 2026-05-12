@@ -174,11 +174,21 @@ Warm startup (already indexed, files unchanged): < 1 second regardless of repo s
 - Instance methods, class methods (`def self.method`), and `attr_reader`/`attr_writer`/`attr_accessor` (as synthetic methods)
 - Call graph edges, with cross-file resolution including Rails-style autoloading (no explicit `require` needed)
 
+**Ruby (Rails mode — auto-detected when `config/routes.rb` or `gem "rails"` in Gemfile)**
+- Controller actions: public methods on `*Controller` classes are tagged `kind: "action"`; private methods remain `kind: "method"`
+- ActiveRecord associations: `has_many`, `has_one`, `belongs_to`, `has_and_belongs_to_many` are indexed as synthetic methods
+- Routes: `config/routes.rb` is parsed for HTTP verb routes and `resources`/`namespace` declarations (`kind: "route"`)
+
 ---
 
-## Known limitations
+## Overriding Rails auto-detection
 
-**Ruby coverage is basic.** Rails-aware extraction (routes, associations, controller actions) is not yet implemented.
+Rails mode is detected automatically. To force it on or off, add `.auger.yml`:
+
+```yaml
+ruby:
+  rails: false   # or true to force it on
+```
 
 ---
 

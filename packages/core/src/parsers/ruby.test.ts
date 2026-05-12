@@ -72,6 +72,117 @@ describe("ruby parser", () => {
   });
 });
 
+describe("ruby parser — Rails controller actions", () => {
+  const controllerPath = resolve(__dirname, "../../../../fixtures/ruby/users_controller.rb");
+
+  it("tags public controller methods as action kind", () => {
+    const result = parseRubyFile(controllerPath, { rails: true });
+    const index = result.symbols.find((s) => s.name === "index");
+    expect(index?.kind).toBe("action");
+    expect(index?.parentName).toBe("UsersController");
+  });
+
+  it("tags all CRUD actions correctly", () => {
+    const result = parseRubyFile(controllerPath, { rails: true });
+    const actions = result.symbols.filter((s) => s.kind === "action").map((s) => s.name);
+    expect(actions).toContain("index");
+    expect(actions).toContain("show");
+    expect(actions).toContain("new");
+    expect(actions).toContain("create");
+  });
+
+  it("does not tag private methods as actions", () => {
+    const result = parseRubyFile(controllerPath, { rails: true });
+    const setUser = result.symbols.find((s) => s.name === "set_user");
+    expect(setUser?.kind).toBe("method");
+    const userParams = result.symbols.find((s) => s.name === "user_params");
+    expect(userParams?.kind).toBe("method");
+  });
+
+  it("does not tag controller methods as actions when rails is false", () => {
+    const result = parseRubyFile(controllerPath);
+    const index = result.symbols.find((s) => s.name === "index");
+    expect(index?.kind).toBe("method");
+  });
+});
+
+describe("ruby parser — Rails associations", () => {
+  const postPath = resolve(__dirname, "../../../../fixtures/ruby/post.rb");
+
+  it("extracts belongs_to as a method symbol", () => {
+    const result = parseRubyFile(postPath, { rails: true });
+    const user = result.symbols.find((s) => s.name === "user" && s.parentName === "Post");
+    expect(user?.kind).toBe("method");
+    expect(user?.signature).toMatch(/belongs_to/);
+  });
+
+  it("extracts has_many as a method symbol", () => {
+    const result = parseRubyFile(postPath, { rails: true });
+    const comments = result.symbols.find((s) => s.name === "comments");
+    expect(comments?.kind).toBe("method");
+  });
+
+  it("extracts has_one as a method symbol", () => {
+    const result = parseRubyFile(postPath, { rails: true });
+    const metadata = result.symbols.find((s) => s.name === "metadata");
+    expect(metadata?.kind).toBe("method");
+  });
+
+  it("extracts has_and_belongs_to_many as a method symbol", () => {
+    const result = parseRubyFile(postPath, { rails: true });
+    const tags = result.symbols.find((s) => s.name === "tags");
+    expect(tags?.kind).toBe("method");
+  });
+
+  it("does not extract associations when rails is false", () => {
+    const result = parseRubyFile(postPath);
+    const names = result.symbols.map((s) => s.name);
+    expect(names).not.toContain("user");
+    expect(names).not.toContain("comments");
+  });
+});
+
+describe("ruby parser — Rails routes", () => {
+  const routesPath = resolve(__dirname, "../../../../fixtures/ruby/config/routes.rb");
+
+  it("extracts root route", () => {
+    const result = parseRubyFile(routesPath, { rails: true });
+    const root = result.symbols.find((s) => s.name === "GET /");
+    expect(root?.kind).toBe("route");
+    expect(root?.signature).toMatch(/pages#home/);
+  });
+
+  it("extracts GET route with path and target", () => {
+    const result = parseRubyFile(routesPath, { rails: true });
+    const about = result.symbols.find((s) => s.name === "GET /about");
+    expect(about?.kind).toBe("route");
+    expect(about?.signature).toMatch(/pages#about/);
+  });
+
+  it("extracts POST route", () => {
+    const result = parseRubyFile(routesPath, { rails: true });
+    const contact = result.symbols.find((s) => s.name === "POST /contact");
+    expect(contact?.kind).toBe("route");
+  });
+
+  it("extracts resources", () => {
+    const result = parseRubyFile(routesPath, { rails: true });
+    const users = result.symbols.find((s) => s.name === "resources :users");
+    expect(users?.kind).toBe("route");
+  });
+
+  it("extracts namespaced resources", () => {
+    const result = parseRubyFile(routesPath, { rails: true });
+    const apiUsers = result.symbols.find((s) => s.name === "resources :users" && s.parentName === "/api");
+    expect(apiUsers).toBeDefined();
+  });
+
+  it("returns no symbols when rails is false", () => {
+    const result = parseRubyFile(routesPath);
+    expect(result.symbols.length).toBe(0);
+  });
+});
+
 describe("ruby parser — imports", () => {
   const personPath = resolve(__dirname, "../../../../fixtures/ruby/person.rb");
   const formatterPath = resolve(__dirname, "../../../../fixtures/ruby/formatter.rb");

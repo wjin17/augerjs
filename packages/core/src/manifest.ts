@@ -20,6 +20,7 @@ const ManifestSchema = z.object({
   exclude: z.array(z.string()).optional(),
   output: z.object({ path: z.string() }).optional(),
   watch: z.object({ debounce: z.number().default(300) }).optional(),
+  ruby: z.object({ rails: z.boolean() }).optional(),
   mcp: z
     .object({
       transport: z.enum(["stdio", "http"]).default("stdio"),
@@ -58,4 +59,20 @@ export function defaultManifest(rootDir: string): Manifest {
 export function resolveManifest(rootDir: string): Manifest {
   const manifestPath = join(rootDir, ".auger.yml");
   return existsSync(manifestPath) ? loadManifest(manifestPath) : defaultManifest(rootDir);
+}
+
+function detectRails(rootDir: string): boolean {
+  if (existsSync(join(rootDir, "config", "routes.rb"))) return true;
+  const gemfilePath = join(rootDir, "Gemfile");
+  if (!existsSync(gemfilePath)) return false;
+  try {
+    return /^\s*gem ['"]rails['"]/m.test(readFileSync(gemfilePath, "utf8"));
+  } catch {
+    return false;
+  }
+}
+
+export function getRailsMode(manifest: Manifest, rootDir: string): boolean {
+  if (manifest.ruby !== undefined) return manifest.ruby.rails;
+  return detectRails(rootDir);
 }

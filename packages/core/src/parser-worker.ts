@@ -4,8 +4,9 @@ import { parseTypeScriptFile } from "./parsers/typescript.js";
 import { parseRubyFile } from "./parsers/ruby.js";
 import type { ExtractedFile } from "./parsers/typescript.js";
 
-const { files } = workerData as {
+const { files, rails } = workerData as {
   files: Array<{ path: string; language: "typescript" | "ruby" }>;
+  rails: boolean;
 };
 
 const project = new Project({ useInMemoryFileSystem: false });
@@ -18,7 +19,7 @@ for (const { path, language } of files) {
     const extracted =
       language === "typescript"
         ? parseTypeScriptFile(path, project)
-        : parseRubyFile(path);
+        : parseRubyFile(path, { rails });
     results.push(extracted);
   } catch (err) {
     errors.push({ path, error: String(err) });

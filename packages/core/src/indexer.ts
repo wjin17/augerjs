@@ -3,7 +3,7 @@ import { Worker } from "node:worker_threads";
 import { cpus } from "node:os";
 import { Project } from "ts-morph";
 import { parseTypeScriptFile } from "./parsers/typescript.js";
-import { parseRubyFile } from "./parsers/ruby.js";
+import { parseRubyFile, type RubyParseOptions } from "./parsers/ruby.js";
 import type { ExtractedFile } from "./parsers/typescript.js";
 
 type WorkerResult = {
@@ -19,7 +19,7 @@ export class Indexer {
   private insertEdgeStmt: Database.Statement;
   private insertImportStmt: Database.Statement;
 
-  constructor(private db: Database.Database) {
+  constructor(private db: Database.Database, private rails: boolean = false) {
     this.deleteFileStmt = db.prepare("DELETE FROM files WHERE path = ?");
     this.insertFileStmt = db.prepare(
       "INSERT INTO files (path, language, hash, indexed_at) VALUES (?, ?, ?, ?)"
@@ -42,7 +42,7 @@ export class Indexer {
       extracted =
         language === "typescript"
           ? parseTypeScriptFile(filePath, this.project)
-          : parseRubyFile(filePath);
+          : parseRubyFile(filePath, { rails: this.rails });
     } catch (err) {
       console.error(`[auger] parse error in ${filePath}:`, err);
       return;
@@ -74,7 +74,7 @@ export class Indexer {
       chunks.map(
         (chunk) =>
           new Promise<WorkerResult>((resolve, reject) => {
-            const worker = new Worker(workerUrl, { workerData: { files: chunk } });
+            const worker = new Worker(workerUrl, { workerData: { files: chunk, rails: this.rails } });
             worker.once("message", resolve);
             worker.once("error", reject);
           })

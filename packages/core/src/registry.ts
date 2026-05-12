@@ -1,10 +1,10 @@
 import type { FSWatcher } from "chokidar";
 import type Database from "better-sqlite3";
-import { openDb } from "./db/index.js";
+import { openDb, deleteDbFiles } from "./db/index.js";
 import { Indexer } from "./indexer.js";
 import { startWatcher } from "./watcher.js";
 import { findProjectRoot, dbPathForRoot } from "./project.js";
-import { resolveManifest } from "./manifest.js";
+import { resolveManifest, getRailsMode } from "./manifest.js";
 import { dirname } from "node:path";
 
 interface ProjectContext {
@@ -46,6 +46,7 @@ export class ProjectRegistry {
   async reindexProject(root?: string): Promise<void> {
     const projectRoot = root ? findProjectRoot(root) : this.startupRoot;
     this.closeProject(projectRoot);
+    deleteDbFiles(dbPathForRoot(projectRoot));
     await this.getDb(projectRoot);
   }
 
@@ -74,8 +75,9 @@ export class ProjectRegistry {
 
   private openProject(rootDir: string) {
     const manifest = resolveManifest(rootDir);
+    const rails = getRailsMode(manifest, rootDir);
     const db = openDb(dbPathForRoot(rootDir));
-    const indexer = new Indexer(db);
+    const indexer = new Indexer(db, rails);
     const { watcher, ready } = startWatcher(manifest, rootDir, db, indexer);
     const ctx: ProjectContext = { db, watcher, ready, isReady: false, indexElapsed: null };
     this.projects.set(rootDir, ctx);

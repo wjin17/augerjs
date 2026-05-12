@@ -11,7 +11,7 @@ export type ImportEntry = {
 
 export type ExtractedSymbol = {
   name: string;
-  kind: "function" | "class" | "method" | "interface" | "type" | "constant";
+  kind: "function" | "class" | "method" | "interface" | "type" | "constant" | "action" | "route";
   signature: string;
   docstring: string | null;
   startLine: number;
