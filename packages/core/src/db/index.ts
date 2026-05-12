@@ -32,7 +32,7 @@ export function openDb(dbPath: string): Database.Database {
     db.pragma("foreign_keys = ON");
   } catch (err) {
     if (!isNew && dbPath !== ":memory:") {
-      try { (db! as Database.Database).close(); } catch {}
+      try { (db! as Database.Database).close(); } catch { /* ignore */ }
       wipeDb(dbPath, "corrupt database");
       return openDb(dbPath);
     }

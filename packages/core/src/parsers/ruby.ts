@@ -5,7 +5,6 @@ import { existsSync, readFileSync } from "node:fs";
 import { basename, dirname, resolve } from "node:path";
 import type { ExtractedFile, ExtractedSymbol, ImportEntry } from "./typescript.js";
 
-const REQUIRE_METHODS = new Set(["require_relative", "require"]);
 
 const parser = new Parser();
 parser.setLanguage(Ruby as any);

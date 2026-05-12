@@ -3,7 +3,7 @@ import { Worker } from "node:worker_threads";
 import { cpus } from "node:os";
 import { Project } from "ts-morph";
 import { parseTypeScriptFile } from "./parsers/typescript.js";
-import { parseRubyFile, type RubyParseOptions } from "./parsers/ruby.js";
+import { parseRubyFile } from "./parsers/ruby.js";
 import type { ExtractedFile } from "./parsers/typescript.js";
 
 // Common Ruby method names that are almost always stdlib/built-in, not user-defined.
