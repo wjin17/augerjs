@@ -198,13 +198,11 @@ program
   .action(async () => {
     const rootDir = findProjectRoot(process.cwd());
     const dbPath = dbPathForRoot(rootDir);
-    const isWarm = existsSync(dbPath);
 
-    if (!isWarm) {
+    if (!existsSync(dbPath)) {
       process.stderr.write(`auger: indexing ${rootDir}…\n`);
     }
 
-    const startTime = Date.now();
     const registry = new ProjectRegistry(rootDir);
 
     // Kick off indexing immediately but don't block — connect the MCP transport
@@ -217,11 +215,11 @@ program
         const symbols = (db.prepare("SELECT COUNT(*) as c FROM symbols").get() as { c: number })
           .c;
         const counts = `${files.toLocaleString()} files, ${symbols.toLocaleString()} symbols`;
-        if (isWarm) {
-          process.stderr.write(`auger: ready — ${counts} (warm)\n`);
+        const elapsed = registry.getStatus()?.indexElapsed;
+        if (elapsed != null) {
+          process.stderr.write(`auger: ready — ${counts} indexed in ${(elapsed / 1000).toFixed(1)}s\n`);
         } else {
-          const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
-          process.stderr.write(`auger: ready — ${counts} indexed in ${elapsed}s\n`);
+          process.stderr.write(`auger: ready — ${counts} (warm)\n`);
         }
       })
       .catch((err) => {

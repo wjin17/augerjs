@@ -45,11 +45,27 @@ describe("startWatcher", () => {
   }
 
   describe("add / change handler", () => {
-    it("indexes a new file when add fires", () => {
-      const spy = vi.spyOn(indexer, "indexFile");
+    it("bulk-indexes files on ready after initial add", () => {
+      const spy = vi.spyOn(indexer, "bulkIndex").mockResolvedValue({ elapsed: 0 });
       const watcher = spawnWatcher();
 
       watcher.emit("add", tsRelPath);
+      watcher.emit("ready");
+
+      expect(spy).toHaveBeenCalledWith([{ path: tsFixture, language: "typescript" }]);
+    });
+
+    it("indexes a changed file via indexFile after ready", () => {
+      indexer.indexFile(tsFixture, "typescript");
+      db.prepare("UPDATE files SET hash = 'deadbeef', indexed_at = 0 WHERE path = ?").run(
+        tsFixture
+      );
+
+      const spy = vi.spyOn(indexer, "indexFile");
+      const watcher = spawnWatcher();
+
+      watcher.emit("ready");
+      watcher.emit("change", tsRelPath);
 
       expect(spy).toHaveBeenCalledWith(tsFixture, "typescript");
     });
@@ -81,21 +97,6 @@ describe("startWatcher", () => {
       watcher.emit("add", tsRelPath);
 
       expect(spy).not.toHaveBeenCalled();
-    });
-
-    it("re-indexes when hash has changed", () => {
-      indexer.indexFile(tsFixture, "typescript");
-      // Stale hash + indexed_at=0 so both fast-paths fail and re-index runs.
-      db.prepare("UPDATE files SET hash = 'deadbeef', indexed_at = 0 WHERE path = ?").run(
-        tsFixture
-      );
-
-      const spy = vi.spyOn(indexer, "indexFile");
-      const watcher = spawnWatcher();
-
-      watcher.emit("change", tsRelPath);
-
-      expect(spy).toHaveBeenCalledWith(tsFixture, "typescript");
     });
 
     it("ignores files with unsupported extensions", () => {

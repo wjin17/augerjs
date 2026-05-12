@@ -11,7 +11,7 @@ export function startWatcher(
   rootDir: string,
   db: Database.Database,
   indexer: Indexer
-): { watcher: FSWatcher; ready: Promise<void> } {
+): { watcher: FSWatcher; ready: Promise<{ elapsed: number } | null> } {
   const watcher = chokidar.watch(manifest.include, {
     cwd: rootDir,
     ignored: manifest.exclude,
@@ -30,6 +30,9 @@ export function startWatcher(
   const selectFile = db.prepare<[string], { hash: string; indexed_at: number }>(
     "SELECT hash, indexed_at FROM files WHERE path = ?"
   );
+
+  let isReady = false;
+  const pending: Array<{ path: string; language: "typescript" | "ruby" }> = [];
 
   const handle = (path: string) => {
     const lang = langFor(path);
@@ -50,6 +53,11 @@ export function startWatcher(
       const hash = createHash("sha256").update(content).digest("hex");
       if (existing?.hash === hash) return;
 
+      if (!isReady) {
+        pending.push({ path: fullPath, language: lang });
+        return;
+      }
+
       indexer.indexFile(fullPath, lang);
     } catch (err) {
       console.error(`[auger] failed to index ${fullPath}:`, err);
@@ -68,8 +76,10 @@ export function startWatcher(
   watcher.on("change", handle);
   watcher.on("unlink", handleUnlink);
 
-  const ready = new Promise<void>((resolve) => {
+  const ready = new Promise<{ elapsed: number } | null>((resolve) => {
     watcher.once("ready", () => {
+      isReady = true;
+
       // Remove DB entries for files deleted while the watcher was offline.
       const tracked = db.prepare("SELECT path FROM files").all() as { path: string }[];
       for (const { path } of tracked) {
@@ -81,7 +91,16 @@ export function startWatcher(
           }
         }
       }
-      resolve();
+
+      if (pending.length === 0) {
+        resolve(null);
+        return;
+      }
+
+      indexer.bulkIndex(pending).then(resolve).catch((err) => {
+        console.error("[auger] bulk index failed:", err);
+        resolve(null);
+      });
     });
   });
 

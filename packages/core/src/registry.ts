@@ -10,8 +10,9 @@ import { dirname } from "node:path";
 interface ProjectContext {
   db: Database.Database;
   watcher: FSWatcher;
-  ready: Promise<void>;
+  ready: Promise<{ elapsed: number } | null>;
   isReady: boolean;
+  indexElapsed: number | null;
 }
 
 export class ProjectRegistry {
@@ -64,11 +65,11 @@ export class ProjectRegistry {
     this.projects.clear();
   }
 
-  getStatus(root?: string): { db: Database.Database; isReady: boolean } | null {
+  getStatus(root?: string): { db: Database.Database; isReady: boolean; indexElapsed: number | null } | null {
     const projectRoot = root ? findProjectRoot(root) : this.startupRoot;
     const ctx = this.projects.get(projectRoot);
     if (!ctx) return null;
-    return { db: ctx.db, isReady: ctx.isReady };
+    return { db: ctx.db, isReady: ctx.isReady, indexElapsed: ctx.indexElapsed };
   }
 
   private openProject(rootDir: string) {
@@ -76,8 +77,11 @@ export class ProjectRegistry {
     const db = openDb(dbPathForRoot(rootDir));
     const indexer = new Indexer(db);
     const { watcher, ready } = startWatcher(manifest, rootDir, db, indexer);
-    const ctx: ProjectContext = { db, watcher, ready, isReady: false };
+    const ctx: ProjectContext = { db, watcher, ready, isReady: false, indexElapsed: null };
     this.projects.set(rootDir, ctx);
-    ready.then(() => { ctx.isReady = true; });
+    ready.then((stats) => {
+      ctx.isReady = true;
+      ctx.indexElapsed = stats?.elapsed ?? null;
+    });
   }
 }
