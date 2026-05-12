@@ -28,9 +28,9 @@ export function createMcpServer(getDb: GetDb, getStatus: GetStatus, reindex?: Re
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
       {
-        name: "find_symbol",
+        name: "locate_symbol",
         description:
-          "Locate where a symbol is defined. Returns file path, line number, and symbol type. Use this when you know a name and need to find it.",
+          "Find where a symbol is defined. Returns file path and line number. Cheaper than grep+read — results in <1ms.",
         inputSchema: {
           type: "object",
           properties: { name: { type: "string" }, ...ROOT_PROP },
@@ -38,9 +38,9 @@ export function createMcpServer(getDb: GetDb, getStatus: GetStatus, reindex?: Re
         },
       },
       {
-        name: "get_symbol",
+        name: "inspect_symbol",
         description:
-          "Get the full record for a named symbol: signature, docstring, callers, and callees. Use this instead of find_symbol when you need to understand a symbol, not just locate it.",
+          "Get the full record for a symbol: signature, docstring, direct callers, and direct callees. Use this when you need to understand a symbol, not just locate it.",
         inputSchema: {
           type: "object",
           properties: { name: { type: "string" }, ...ROOT_PROP },
@@ -50,7 +50,7 @@ export function createMcpServer(getDb: GetDb, getStatus: GetStatus, reindex?: Re
       {
         name: "trace_callers",
         description:
-          "Recursively walk upstream from a symbol — everything that calls it, and everything that calls those callers. Use this to understand the blast radius of a change.",
+          "Recursively walk upstream from a symbol — everything that calls it, and everything that calls those callers. Use this to understand the impact of changing a symbol.",
         inputSchema: {
           type: "object",
           properties: { name: { type: "string" }, max_depth: { type: "number" }, ...ROOT_PROP },
@@ -60,7 +60,7 @@ export function createMcpServer(getDb: GetDb, getStatus: GetStatus, reindex?: Re
       {
         name: "trace_callees",
         description:
-          "Recursively walk downstream from a symbol — everything it calls, and everything those call. Use this to trace execution flow.",
+          "Recursively walk downstream from a symbol — everything it calls, and everything those call. Use this to understand blast radius before a refactor.",
         inputSchema: {
           type: "object",
           properties: { name: { type: "string" }, max_depth: { type: "number" }, ...ROOT_PROP },
@@ -78,12 +78,12 @@ export function createMcpServer(getDb: GetDb, getStatus: GetStatus, reindex?: Re
         },
       },
       {
-        name: "get_file_symbols",
+        name: "outline",
         description:
-          "List all symbols defined in a file: functions, classes, methods, constants, and types.",
+          "Get a structural overview of a file before deciding whether to read it. Returns classes and their methods — cheaper than reading the file. Pass full: true to include all symbols and anonymous callbacks.",
         inputSchema: {
           type: "object",
-          properties: { path: { type: "string" } },
+          properties: { path: { type: "string" }, full: { type: "boolean" } },
           required: ["path"],
         },
       },
@@ -113,10 +113,10 @@ export function createMcpServer(getDb: GetDb, getStatus: GetStatus, reindex?: Re
     const a = (args ?? {}) as Record<string, unknown>;
 
     // Resolve the right project DB for this call.
-    // get_file_symbols derives the project from its `path` argument;
+    // outline derives the project from its `path` argument;
     // all other tools use the explicit `root` param (or fall back to default).
     let root: string | undefined;
-    if (name === "get_file_symbols" && typeof a["path"] === "string") {
+    if (name === "outline" && typeof a["path"] === "string") {
       root = dirname(a["path"]);
     } else if (typeof a["root"] === "string") {
       root = a["root"];
@@ -161,7 +161,7 @@ export function handleTool(
   args: Record<string, unknown>
 ): unknown {
   switch (name) {
-    case "find_symbol": {
+    case "locate_symbol": {
       const rows = db
         .prepare(
           "SELECT name, kind, file_path, start_line FROM symbols WHERE name = ? AND is_anonymous = 0"
@@ -169,7 +169,7 @@ export function handleTool(
         .all(args["name"]) as WithLocation[];
       return { matches: rows.map(withLocation) };
     }
-    case "get_symbol": {
+    case "inspect_symbol": {
       const syms = db
         .prepare("SELECT * FROM symbols WHERE name = ? AND is_anonymous = 0")
         .all(args["name"]) as (WithLocation & { id: number })[];
@@ -211,13 +211,34 @@ export function handleTool(
         .all(args["query"]) as WithLocation[];
       return { results: rows.map(withLocation) };
     }
-    case "get_file_symbols": {
-      const rows = db
+    case "outline": {
+      const path = args["path"] as string;
+      if (args["full"] === true) {
+        const rows = db
+          .prepare(
+            "SELECT name, kind, signature, file_path, start_line, end_line FROM symbols WHERE file_path = ? ORDER BY start_line"
+          )
+          .all(path) as WithLocation[];
+        return { symbols: rows.map(withLocation) };
+      }
+      // One level deep: top-level symbols + their direct named children, no anonymous
+      type RowWithId = WithLocation & { id: number };
+      const topRows = db
         .prepare(
-          "SELECT name, kind, signature, file_path, start_line, end_line FROM symbols WHERE file_path = ? ORDER BY start_line"
+          "SELECT id, name, kind, signature, file_path, start_line, end_line FROM symbols WHERE file_path = ? AND parent_id IS NULL ORDER BY start_line"
         )
-        .all(args["path"]) as WithLocation[];
-      return { symbols: rows.map(withLocation) };
+        .all(path) as RowWithId[];
+      if (topRows.length === 0) return { symbols: [] };
+      const topIds = topRows.map((r) => r.id);
+      const ph = topIds.map(() => "?").join(", ");
+      const childRows = db
+        .prepare(
+          `SELECT name, kind, signature, file_path, start_line, end_line FROM symbols WHERE file_path = ? AND parent_id IN (${ph}) AND is_anonymous = 0 ORDER BY start_line`
+        )
+        .all(path, ...topIds) as WithLocation[];
+      const topWithoutId = topRows.map(({ id: _id, ...rest }) => rest as WithLocation);
+      const all = [...topWithoutId, ...childRows].sort((a, b) => a.start_line - b.start_line);
+      return { symbols: all.map(withLocation) };
     }
     default:
       throw new Error(`Unknown tool: ${name}`);

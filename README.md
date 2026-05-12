@@ -80,12 +80,12 @@ All tools accept an optional `root` parameter — any path inside the target pro
 
 | Tool | Required | Optional | Description |
 |---|---|---|---|
-| `find_symbol` | `name` | `root` | Locate where a symbol is defined |
-| `get_symbol` | `name` | `root` | Full record: signature, docstring, direct callers and callees |
-| `trace_callers` | `name` | `root`, `max_depth` | Recursive upstream call graph |
-| `trace_callees` | `name` | `root`, `max_depth` | Recursive downstream call graph |
+| `locate_symbol` | `name` | `root` | Find where a symbol is defined — cheaper than grep+read |
+| `inspect_symbol` | `name` | `root` | Full record: signature, docstring, direct callers and callees |
+| `trace_callers` | `name` | `root`, `max_depth` | Recursive upstream call graph — understand impact before changing |
+| `trace_callees` | `name` | `root`, `max_depth` | Recursive downstream call graph — understand blast radius before refactoring |
 | `search` | `query` | `root` | Full-text search across names, signatures, and docstrings |
-| `get_file_symbols` | `path` | — | All symbols in a file (auto-routes to the right project) |
+| `outline` | `path` | `full` | Structural overview of a file: classes and their methods. Pass `full: true` for all symbols including anonymous callbacks |
 | `indexing_status` | — | `root` | Check whether the index has finished building and how many files/symbols are indexed so far |
 | `reindex` | — | `root` | Drop and rebuild the index from scratch |
 
@@ -95,7 +95,7 @@ All results include a `location` field in `file:line` format.
 
 ```
 # Working in project A, need to look something up in project B:
-find_symbol("PaymentService", root="/path/to/payment-service")
+locate_symbol("PaymentService", root="/path/to/payment-service")
 search("webhook handler", root="/path/to/payment-service")
 ```
 
@@ -114,12 +114,12 @@ npx @augerjs/cli <command>
 | `status [--watch] [--json]` | Show indexed file and symbol counts; `--watch` polls until indexing stabilizes |
 | `reindex [-r <path>]` | Clear the index so it rebuilds fresh on next start |
 | `doctor` | Check MCP config and index health, exits 1 if misconfigured |
-| `find_symbol <name> [-r <path>]` | Locate a symbol |
-| `get_symbol <name> [-r <path>]` | Full symbol record |
+| `locate_symbol <name> [-r <path>]` | Locate a symbol |
+| `inspect_symbol <name> [-r <path>]` | Full symbol record |
 | `trace_callers <name> [-r <path>]` | Upstream call graph |
 | `trace_callees <name> [-r <path>]` | Downstream call graph |
 | `search <query> [-r <path>]` | Full-text search |
-| `get_file_symbols <path>` | All symbols in a file |
+| `outline <path> [--full]` | Structural overview of a file |
 
 `doctor` is useful for verifying an install — exits 0 if healthy, 1 if something needs fixing.
 

@@ -410,16 +410,16 @@ function print(result: unknown) {
 }
 
 program
-  .command("find_symbol <name>")
+  .command("locate_symbol <name>")
   .description("Locate where a symbol is defined")
   .option("-r, --root <path>", "path inside the target project (default: cwd)")
-  .action((name, opts) => print(handleTool(openIndex(opts.root), "find_symbol", { name })));
+  .action((name, opts) => print(handleTool(openIndex(opts.root), "locate_symbol", { name })));
 
 program
-  .command("get_symbol <name>")
+  .command("inspect_symbol <name>")
   .description("Full record: signature, docstring, callers, callees")
   .option("-r, --root <path>", "path inside the target project (default: cwd)")
-  .action((name, opts) => print(handleTool(openIndex(opts.root), "get_symbol", { name })));
+  .action((name, opts) => print(handleTool(openIndex(opts.root), "inspect_symbol", { name })));
 
 program
   .command("trace_callers <name>")
@@ -450,11 +450,12 @@ program
   .action((query, opts) => print(handleTool(openIndex(opts.root), "search", { query })));
 
 program
-  .command("get_file_symbols <path>")
-  .description("All symbols defined in a file")
-  .action((path) => {
+  .command("outline <path>")
+  .description("Structural overview of a file: classes and their methods")
+  .option("--full", "include all symbols and anonymous callbacks")
+  .action((path, opts) => {
     const absPath = resolve(path);
-    print(handleTool(openIndex(absPath), "get_file_symbols", { path: absPath }));
+    print(handleTool(openIndex(absPath), "outline", { path: absPath, full: opts.full ?? false }));
   });
 
 program.parseAsync();

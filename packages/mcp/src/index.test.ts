@@ -23,33 +23,33 @@ describe("MCP tools", () => {
     db.close();
   });
 
-  describe("find_symbol", () => {
+  describe("locate_symbol", () => {
     it("returns matches for a known symbol", () => {
-      const result = handleTool(db, "find_symbol", { name: "add" }) as any;
+      const result = handleTool(db, "locate_symbol", { name: "add" }) as any;
       expect(result.matches).toHaveLength(1);
       expect(result.matches[0].name).toBe("add");
       expect(result.matches[0].kind).toBe("function");
     });
 
     it("includes a location field", () => {
-      const result = handleTool(db, "find_symbol", { name: "add" }) as any;
+      const result = handleTool(db, "locate_symbol", { name: "add" }) as any;
       expect(result.matches[0].location).toMatch(/sample\.ts:\d+/);
     });
 
     it("returns empty matches for an unknown symbol", () => {
-      const result = handleTool(db, "find_symbol", { name: "doesNotExist" }) as any;
+      const result = handleTool(db, "locate_symbol", { name: "doesNotExist" }) as any;
       expect(result.matches).toHaveLength(0);
     });
 
     it("does not return anonymous symbols", () => {
-      const result = handleTool(db, "find_symbol", { name: "<anonymous:46>" }) as any;
+      const result = handleTool(db, "locate_symbol", { name: "<anonymous:46>" }) as any;
       expect(result.matches).toHaveLength(0);
     });
   });
 
-  describe("get_symbol", () => {
+  describe("inspect_symbol", () => {
     it("returns the full record for a known symbol", () => {
-      const result = handleTool(db, "get_symbol", { name: "greet" }) as any;
+      const result = handleTool(db, "inspect_symbol", { name: "greet" }) as any;
       expect(result.name).toBe("greet");
       expect(result.kind).toBe("method");
       expect(result.signature).toContain("greet");
@@ -57,31 +57,31 @@ describe("MCP tools", () => {
     });
 
     it("includes callers and callees", () => {
-      const result = handleTool(db, "get_symbol", { name: "greet" }) as any;
+      const result = handleTool(db, "inspect_symbol", { name: "greet" }) as any;
       expect(Array.isArray(result.callers)).toBe(true);
       expect(Array.isArray(result.callees)).toBe(true);
       expect(result.callees.some((c: any) => c.name === "formatName")).toBe(true);
     });
 
     it("callers and callees include location fields", () => {
-      const result = handleTool(db, "get_symbol", { name: "greet" }) as any;
+      const result = handleTool(db, "inspect_symbol", { name: "greet" }) as any;
       for (const callee of result.callees) {
         expect(callee.location).toMatch(/:\d+$/);
       }
     });
 
     it("returns found: false for an unknown symbol", () => {
-      const result = handleTool(db, "get_symbol", { name: "doesNotExist" }) as any;
+      const result = handleTool(db, "inspect_symbol", { name: "doesNotExist" }) as any;
       expect(result.found).toBe(false);
     });
 
     it("does not return anonymous symbols", () => {
-      const result = handleTool(db, "get_symbol", { name: "<anonymous:46>" }) as any;
+      const result = handleTool(db, "inspect_symbol", { name: "<anonymous:46>" }) as any;
       expect(result.found).toBe(false);
     });
 
     it("returns flat record for a unique name", () => {
-      const result = handleTool(db, "get_symbol", { name: "add" }) as any;
+      const result = handleTool(db, "inspect_symbol", { name: "add" }) as any;
       expect(result.name).toBe("add");
       expect(result.matches).toBeUndefined();
     });
@@ -94,7 +94,7 @@ describe("MCP tools", () => {
       db.prepare(
         "INSERT INTO symbols (name, kind, file_path, start_line, end_line, signature) VALUES (?, 'function', '/other/file.ts', 1, 5, 'function add(...)')"
       ).run("add");
-      const result = handleTool(db, "get_symbol", { name: "add" }) as any;
+      const result = handleTool(db, "inspect_symbol", { name: "add" }) as any;
       expect(Array.isArray(result.matches)).toBe(true);
       expect(result.matches).toHaveLength(2);
       expect(result.matches.every((m: any) => m.name === "add")).toBe(true);
@@ -161,14 +161,13 @@ describe("MCP tools", () => {
     });
   });
 
-  describe("get_file_symbols", () => {
-    it("returns all symbols for a file", () => {
-      const result = handleTool(db, "get_file_symbols", {
+  describe("outline", () => {
+    it("returns top-level and direct child symbols by default", () => {
+      const result = handleTool(db, "outline", {
         path: `${fixtures}/typescript/sample.ts`,
       }) as any;
       const names = result.symbols.map((s: any) => s.name).sort();
-      const namedNames = names.filter((n: string) => !n.startsWith("<anonymous"));
-      expect(namedNames).toEqual([
+      expect(names).toEqual([
         "Direction",
         "Down",
         "Greeter",
@@ -189,11 +188,20 @@ describe("MCP tools", () => {
         "processItems",
         "routes",
       ]);
-      expect(names.filter((n: string) => n.startsWith("<anonymous")).length).toBeGreaterThan(0);
+      expect(names.every((n: string) => !n.startsWith("<anonymous"))).toBe(true);
+    });
+
+    it("includes anonymous symbols when full: true", () => {
+      const result = handleTool(db, "outline", {
+        path: `${fixtures}/typescript/sample.ts`,
+        full: true,
+      }) as any;
+      const names = result.symbols.map((s: any) => s.name);
+      expect(names.some((n: string) => n.startsWith("<anonymous"))).toBe(true);
     });
 
     it("includes location on each symbol", () => {
-      const result = handleTool(db, "get_file_symbols", {
+      const result = handleTool(db, "outline", {
         path: `${fixtures}/typescript/sample.ts`,
       }) as any;
       for (const s of result.symbols) {
@@ -202,7 +210,7 @@ describe("MCP tools", () => {
     });
 
     it("returns empty for an unindexed path", () => {
-      const result = handleTool(db, "get_file_symbols", { path: "/not/indexed.ts" }) as any;
+      const result = handleTool(db, "outline", { path: "/not/indexed.ts" }) as any;
       expect(result.symbols).toHaveLength(0);
     });
   });
