@@ -6,6 +6,28 @@ import { parseTypeScriptFile } from "./parsers/typescript.js";
 import { parseRubyFile, type RubyParseOptions } from "./parsers/ruby.js";
 import type { ExtractedFile } from "./parsers/typescript.js";
 
+// Common Ruby method names that are almost always stdlib/built-in, not user-defined.
+// Skipped during global (Pass 4) name resolution to prevent false-positive call edges.
+const RUBY_PASS4_BLOCKLIST = [
+  "to_i", "to_f", "to_s", "to_str", "to_sym", "to_h", "to_a", "to_r", "to_c",
+  "new", "class", "send", "public_send", "respond_to?", "is_a?", "kind_of?",
+  "nil?", "inspect", "freeze", "frozen?", "dup", "clone", "tap", "itself",
+  "puts", "print", "p", "pp", "warn", "raise", "fail",
+  "map", "collect", "each", "each_with_object", "each_with_index", "each_slice",
+  "select", "filter", "reject", "find", "detect", "flat_map", "reduce", "inject",
+  "any?", "all?", "none?", "count", "sum", "first", "last", "min", "max",
+  "min_by", "max_by", "sort", "sort_by", "compact", "uniq", "flatten", "include?",
+  "group_by", "zip", "take", "drop", "chunk",
+  "keys", "values", "merge", "merge!", "update", "fetch", "dig",
+  "has_key?", "key?", "transform_values", "transform_keys",
+  "push", "pop", "shift", "unshift", "join", "size", "length", "empty?",
+  "strip", "chomp", "split", "gsub", "sub", "match?", "upcase", "downcase",
+  "start_with?", "end_with?", "chars",
+  "message", "name", "call", "delete",
+  "save", "save!", "destroy", "destroy!", "reload", "valid?", "invalid?",
+  "errors", "attributes", "persisted?",
+];
+
 type WorkerResult = {
   results: ExtractedFile[];
   errors: Array<{ path: string; error: string }>;
@@ -18,6 +40,7 @@ export class Indexer {
   private insertSymbolStmt: Database.Statement;
   private insertEdgeStmt: Database.Statement;
   private insertImportStmt: Database.Statement;
+  private resolvePass4Stmt: Database.Statement;
 
   constructor(private db: Database.Database, private rails: boolean = false) {
     this.deleteFileStmt = db.prepare("DELETE FROM files WHERE path = ?");
@@ -34,6 +57,25 @@ export class Indexer {
     this.insertImportStmt = db.prepare(
       "INSERT OR REPLACE INTO imports (file_path, local_name, exported_name, source_path) VALUES (?, ?, ?, ?)"
     );
+    const ph = RUBY_PASS4_BLOCKLIST.map(() => "?").join(", ");
+    this.resolvePass4Stmt = db.prepare(`
+      UPDATE call_edges
+      SET callee_id = (
+        SELECT s.id FROM symbols s
+        JOIN files f ON f.path = s.file_path
+        WHERE s.name = call_edges.callee_name
+        AND s.is_anonymous = 0
+        AND f.language = 'ruby'
+        LIMIT 1
+      )
+      WHERE callee_id IS NULL
+      AND call_edges.callee_name NOT IN (${ph})
+      AND caller_id IN (
+        SELECT s.id FROM symbols s
+        JOIN files f ON f.path = s.file_path
+        WHERE f.language = 'ruby'
+      )
+    `);
   }
 
   indexFile(filePath: string, language: "typescript" | "ruby") {
@@ -203,23 +245,8 @@ export class Indexer {
       WHERE callee_id IS NULL
     `);
 
-    // Pass 4: global Ruby name resolution (Rails autoloading — no explicit require)
-    this.db.exec(`
-      UPDATE call_edges
-      SET callee_id = (
-        SELECT s.id FROM symbols s
-        JOIN files f ON f.path = s.file_path
-        WHERE s.name = call_edges.callee_name
-        AND s.is_anonymous = 0
-        AND f.language = 'ruby'
-        LIMIT 1
-      )
-      WHERE callee_id IS NULL
-      AND caller_id IN (
-        SELECT s.id FROM symbols s
-        JOIN files f ON f.path = s.file_path
-        WHERE f.language = 'ruby'
-      )
-    `);
+    // Pass 4: global Ruby name resolution (Rails autoloading — no explicit require).
+    // Skips names in RUBY_PASS4_BLOCKLIST to avoid false edges for common built-ins.
+    this.resolvePass4Stmt.run(...RUBY_PASS4_BLOCKLIST);
   }
 }
